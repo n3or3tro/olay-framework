@@ -1,4 +1,4 @@
-package app
+package olay
 import "core:c"
 import "core:fmt"
 import s "core:strings"

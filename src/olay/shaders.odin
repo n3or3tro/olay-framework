@@ -1,5 +1,5 @@
 // Basic abstraction to make working with OpenGL shaders easier.
-package app
+package olay
 import "core:fmt"
 import "core:io"
 import alg "core:math/linalg"
@@ -8,15 +8,15 @@ import "core:strings"
 import gl "vendor:OpenGL"
 import sdl "vendor:sdl2"
 
-QUAD_VERTEX_SHADER_PATH :: "src/app/shaders/box_vertex_shader.glsl"
-QUAD_PIXEL_SHADER_PATH  :: "src/app/shaders/box_pixel_shader.glsl"
-BLUR_VERTEX_SHADER_PATH :: "src/app/shaders/blurring_vertex_shader.glsl"
-BLUR_PIXEL_SHADER_PATH  :: "src/app/shaders/blurring_pixel_shader.glsl"
+QUAD_VERTEX_SHADER_PATH :: "src/olay/shaders/box_vertex_shader.glsl"
+QUAD_PIXEL_SHADER_PATH  :: "src/olay/shaders/box_pixel_shader.glsl"
+BLUR_VERTEX_SHADER_PATH :: "src/olay/shaders/blurring_vertex_shader.glsl"
+BLUR_PIXEL_SHADER_PATH  :: "src/olay/shaders/blurring_pixel_shader.glsl"
 
-QUAD_VERTEX_SHADER_AS_BYTES :: #load("../app/shaders/box_vertex_shader.glsl")
-QUAD_PIXEL_SHADER_AS_BYTES  :: #load("../app/shaders/box_pixel_shader.glsl")
-BLUR_VERTEX_SHADER_AS_BYTES :: #load("../app/shaders/blurring_vertex_shader.glsl")
-BLUR_PIXEL_SHADER_AS_BYTES  :: #load("../app/shaders/blurring_pixel_shader.glsl")
+QUAD_VERTEX_SHADER_AS_BYTES :: #load("../olay/shaders/box_vertex_shader.glsl")
+QUAD_PIXEL_SHADER_AS_BYTES  :: #load("../olay/shaders/box_pixel_shader.glsl")
+BLUR_VERTEX_SHADER_AS_BYTES :: #load("../olay/shaders/blurring_vertex_shader.glsl")
+BLUR_PIXEL_SHADER_AS_BYTES  :: #load("../olay/shaders/blurring_pixel_shader.glsl")
 
 
 shader_as_cstring :: proc(path: string) -> string {
@@ -28,13 +28,6 @@ shader_as_cstring :: proc(path: string) -> string {
 create_shader :: proc(vshader_path: string, fshader_path: string) -> u32 {
 	vertex_shader := shader_as_cstring(vshader_path)
 	fragment_shader := shader_as_cstring(fshader_path)
-	// // simpler way
-	// pid, ok := gl.load_shaders_source(vertex_shader, fragment_shader)
-	// if !ok {
-	// 	fmt.eprintln("Failed to create GLSL program")
-	// 	panic("Failed to create GLSL program")
-	// }
-	// shader_program := pid
 	shader_program := gl.CreateProgram()
 
 	vs, verr := gl.compile_shader_from_source(vertex_shader, .VERTEX_SHADER)
@@ -44,10 +37,6 @@ create_shader :: proc(vshader_path: string, fshader_path: string) -> u32 {
 	}
 	check_shader_compiled(vs)
 	check_shader_compiled(fs)
-	// this makes it impossible to debug, pretty sure it deletes the shader code from the gpu, but the
-	// ?binary? is still there. (not really sure)
-	// defer gl.DeleteShader(vs)
-	// defer gl.DeleteShader(fs)
 
 	gl.AttachShader(shader_program, vs)
 	gl.AttachShader(shader_program, fs)
@@ -83,9 +72,7 @@ check_shader_compiled :: proc(shader: u32) -> bool {
 		println("log size is:", log_size)
 		error_msg: string = string(make([]u8, log_size))
 		panic(fmt.tprintf("shader %u didn't compile correctly ", shader))
-		// return false
 	}
-	// println("shader compiled fine")
 	return true
 }
 

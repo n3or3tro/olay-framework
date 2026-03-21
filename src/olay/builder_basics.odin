@@ -1,4 +1,4 @@
-package app
+package olay
 import "base:intrinsics"
 import "core:math"
 import "core:sort"
@@ -216,32 +216,6 @@ edit_number_box :: proc(
 	new_value := strconv.atoi(new_data_string)
 	new_value = clamp(new_value, min_val, max_val)
 
-
-	// Only update audio state if we actually changed the value this frame
-	// Unlike pitches, we can basically always immediately update the audio state for 
-	// a step whose value is a number because we clip the number to range on each
-	// frame and the input handling function only allows numbers into the data.
-	update_audio_state: if step_metadata, ok := box.metadata.(Metadata_Track_Step); ok { 
-		track := step_metadata.track
-		step := step_metadata.step
-		change: State_Change
-		switch step_metadata.type { 
-		case .Volume:
-			old_data := app.audio.tracks[track].volumes[step]
-			if old_data == new_value do break update_audio_state
-			app.audio.tracks[track].volumes[step] = new_value
-		case .Chop:
-			old_data := app.audio.tracks[track].chops[step]
-			if old_data == new_value do break update_audio_state
-			app.audio.tracks[track].chops[step] = new_value
-		case .Send2:
-			old_data := app.audio.tracks[track].send2[step]
-			if old_data == new_value do break update_audio_state
-			app.audio.tracks[track].send2[step] = new_value
-		case .Pitch:
-			panic("This shouldn't happen :)")
-		}
-	}
 	value^ = new_value
 	edit.end(&editor)
 	return box_signals
@@ -339,103 +313,6 @@ edit_text_box :: proc(
 	return box_signals(edit_box)
 }
 
-edit_pitch_box :: proc(
-	config: Box_Config,
-	id := "",
-	extra_flags := Box_Flags{},
-	metadata := Box_Metadata{},
-) -> Box_Signals 
-{ 
-	handle_pitch_input :: proc(state: ^Edit_Text_State, editor: ^edit.State, box: ^Box) -> string {
-		write_idx: u32 = 0
-		for i := u32(0); i < app.curr_chars_stored; i += 1 {
-			keycode := app.char_queue[i]
-			handled := true
-			#partial switch keycode {
-			case .LEFT:
-				edit.move_to(editor, .Left)
-			case .RIGHT:
-				edit.move_to(editor, .Right)
-			case .BACKSPACE:
-				edit.delete_to(editor, .Left)
-			case .DELETE:
-				edit.delete_to(editor, .Right)
-			case .UP:
-				edit.move_to(editor, .End)
-				app.curr_chars_stored = write_idx
-				return pitch_up_one_semitone(str.to_string(editor.builder^))
-			case .DOWN:
-				edit.move_to(editor, .End)
-				app.curr_chars_stored = write_idx
-				return pitch_down_one_semitone(str.to_string(editor.builder^))
-			case:
-				// Pitch can be at most 3 chars.
-				if str.builder_len(editor.builder^) < 3 {
-					char := rune(keycode)
-					if unicode.is_alpha(char) {
-						edit.input_rune(editor, unicode.to_upper(char))
-					} else if unicode.is_digit(char) || char == '#' {
-						edit.input_rune(editor, char)
-					} else {
-						handled = false
-					}
-				} else {
-					handled = false
-				}
-			}
-			if !handled {
-				app.char_queue[write_idx] = keycode
-				write_idx += 1
-			}
-		}
-		app.curr_chars_stored = write_idx
-		state.selection = editor.selection
-		return str.to_string(editor.builder^)
-	}
-
-	step_data := metadata.(Metadata_Track_Step)
-	pitch := app.audio.tracks[step_data.track].pitches[step_data.step]
-	// Since we re-grab the pitch every frame, we can just temp allocate the display string.
-	buf := make([]byte, 32, context.temp_allocator)
-	pitch_as_string := get_note_from_num(pitch)
-	pitch_box := box_from_cache(
-		{.Draw, .Draw_Text, .Clickable, .Edit_Text} + extra_flags,
-		config, 
-		pitch_as_string,
-		id,
-		metadata
-	)
-
-	// No need to run editing code if the box isn't active.
-	if ui_state.last_active_box != pitch_box do return box_signals(pitch_box)
-
-	// All text/edit state and the string buffers used when editing are temporary,
-	// So we need to permanently allocate the resulting final result at some point so it can
-	// be stored across frames. We also need to store each text editors state across frames.
-	builder := str.builder_make(context.temp_allocator)
-	editor: edit.State
-	edit.init(&editor, context.temp_allocator, context.temp_allocator)
-	edit.setup_once(&editor, &builder)
-	edit.begin(&editor, 0, &builder)
-	edit.input_text(&editor, pitch_as_string)
-	
-	existing_pitch_box := true
-	if pitch_box.id not_in ui_state.text_editors_state {
-		ui_state.text_editors_state[pitch_box.id] = Edit_Text_State{}
-		existing_pitch_box = false
-	}
-
-	state := &ui_state.text_editors_state[pitch_box.id]
-	editor.selection = state.selection
-	new_pitch := handle_pitch_input(state, &editor, pitch_box)
-	if pitch_valid(new_pitch)  && new_pitch != pitch_as_string {
-		track := metadata.(Metadata_Track_Step).track 
-		step := metadata.(Metadata_Track_Step).step 
-		pitch_set_from_note(track, step, new_pitch)
-	}
-	return box_signals(pitch_box)
-}
-
 Slider_Signals :: struct {
 	track: Box_Signals,
 	grip:  Box_Signals,
@@ -484,7 +361,7 @@ vertical_slider :: proc(
 	)
 	grip_signals := box_signals(grip)
 	if grip_signals.box == ui_state.dragged_box { 
-		undo_push(slider_value)
+		// undo_push(slider_value)
 		mouse_y := f32(app.mouse.pos.y)
         track_top := f32(track.top_left.y)  // This is also from last frame
         track_height := f32(track.prev_height)  // Use last_height instead of height
@@ -761,14 +638,14 @@ circular_knob :: proc(
 
 	scroll_speed := app.keys_held[sdl.Scancode.LSHIFT] ? 200.0 : 40.0
 	if knob_body_signals.scrolled_up {
-		undo_push(value)
+		// undo_push(value)
 		if logarithmic {
 			value^ *= math.pow(max_val / min_val, 1.0 / scroll_speed)
 		} else { 
 			value^ += (max_val - min_val) / scroll_speed 
 		}
 	} else if knob_body_signals.scrolled_down  { 
-		undo_push(value)
+		// undo_push(value)
 		if logarithmic {
 			value^ /= math.pow(max_val / min_val, 1.0 / scroll_speed)
 		} else {
@@ -820,7 +697,7 @@ circular_knob :: proc(
 	}
 
 	if ui_state.dragged_box == knob_body {
-		undo_push(value)
+		// undo_push(value)
 		scale_factor := app.keys_held[sdl.Scancode.LSHIFT] ? 0.8 : 3.8
 		delta_y := app.mouse_last_frame.pos.y - app.mouse.pos.y
 		normalized := f64(delta_y) / f64(app.wy) // fraction of screen height per pixel drag
@@ -895,6 +772,43 @@ virtual_list_end :: proc(state: Virtual_List_State) {
 	} else {
 		ui_state.parents_top = nil
 	}
+}
+
+hover_help_text :: proc(label: string, main_box: ^Box) { 
+	// By default hover text is rendered inline with the left edge of the parent box,
+	// unless it would overflow.
+	font_size :u32 = 20
+	padding_size := 4
+	text_len := font_get_strings_rendered_len(label, font_size) + padding_size * 2 
+	floating_offset: [2]f32 
+	if (text_len + main_box.top_left.x) > app.wx {
+		printfln("help label: {} will go offscreen, so render it to the left", label)
+		floating_offset = {
+			f32(main_box.bottom_right.x - text_len),
+			f32(main_box.bottom_right.y + 2)
+		}
+	} else { 
+		floating_offset = {
+			f32(main_box.top_left.x + padding_size),
+			f32(main_box.bottom_right.y + 2)
+		}
+	}
+	child_container(
+		{
+			floating_type = .Absolute_Pixel,
+			floating_offset = floating_offset,
+			size = Size_Fit_Children,
+			padding = padding(padding_size),
+			border = border(1),
+			border_color = .Red_500,
+			z_index = 500,
+			min_size = {50, 30},
+			corner_radius = 3,
+		},
+		{alignment_horizontal = .Center, alignment_vertical = .Center},
+		box_flags = {.Draw, .Frosted, .Draw_Border}
+	)
+	text(label, {size=Size_Fit_Text, text_justify = {.Center, .Center}, color = .Stone_500, font_size = 20})
 }
 
 VList_Item_Size :: union {

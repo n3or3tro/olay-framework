@@ -1,4 +1,4 @@
-package app
+package olay
 // import sarr "core:container/small_array"
 import "core:encoding/json"
 import "core:fmt"
@@ -92,22 +92,12 @@ UI_State :: struct {
 	// Necessary shared state for animations. Could definitely live on a pool based allocator.
 	animations:               [N_MAX_ANIMATIONS]Animation_Item,
 	animations_stored:		  int,
-	undo_stack:               [dynamic]State_Change,
-	redo_stack:               [dynamic]State_Change,
 	// Whether or not a track's eq is showing.
-	eqs:                      [dynamic]bool,
 	// Maps scrollable containers id to the amount of offset to apply to their scrolled children in px.
 	scroll_offsets: map[string]int,
-	file_browser_allocator: mem.Allocator,
-	browser_files: [dynamic]Browser_File,
-	browser_dirs:  [dynamic]Browser_Directory,
-	browser_search_term: 	string,
-	browser_sort_ascending: bool,
 	frames_since_sleep: 	i8,
 	event_wait_timeout: 	f64,
 	prev_frame_start_ms: 	f64,
-	show_mixer: bool,
-	show_track_waveforms: bool,
 }
 
 Draggable_Window_Metadata :: struct { 
@@ -123,7 +113,6 @@ Draggable_Window_Metadata :: struct {
 // These are all the types of data that can be dropped on items that are drag-and-drop
 // enabled.
 Drop_Data :: union {
-	Browser_File,
 	string,
 	int,
 	f32,
@@ -183,12 +172,6 @@ init_ui_state :: proc() -> ^UI_State {
 	ui_state.color_stack = make([dynamic]Color_RGBA)
 	ui_state.box_cache = make(map[string]^Box)
 	ui_state.frame_signals = make(map[string]Box_Signals)
-	ui_state.show_mixer = true
-	// ui_state.sidebar_shown = true
-	// ui_state.clipping_stack = make([dynamic]^Rect)
-
-	// Fine to leave this dangling since it has the same lifetime as the whole program.
-	_, ui_state.file_browser_allocator =  arena_allocator_new("file-browser-arena")
 
 	wx: i32 = 0
 	wy: i32 = 0
@@ -228,8 +211,6 @@ init_ui_state :: proc() -> ^UI_State {
 		panic("")
 	}
 	ui_state.blur_shader_program = blur_shader_program_id
-
-
 
 	// Setup shader.
 	bind_shader(ui_state.quad_shader_program)
@@ -344,8 +325,6 @@ create_ui :: proc() -> ^Box {
 		collect_frame_signals(ui_state.root)
 	}
 
-	// This is the first step of the mark and sweep, any boxes which are not re-created this frame,
-	// will be removed from the cache at the end of the frame.
 	ui_start_time := time.now()._nsec
 	for _, box in ui_state.box_cache {
 		box.keep = false
@@ -363,145 +342,13 @@ create_ui :: proc() -> ^Box {
 		id = "root",
 		box_flags = {.Draw, .Glow, .Clickable},
 	).box
-
 	ui_state.root = root
 
-	topbar()
-	if ui_state.tab_num == 0 {
-		add_track_btn :=  text_button(
-			"+",
-			{
-				floating_type = .Center_Right,
-				padding       = {10, 10, 10, 10},
-				border        = border(1),
-				size 		  = {{.Fit_Text, 1}, {.Fit_Text, 1}},
-				color         = .Lime_200,
-			},
-  		)
-		if add_track_btn.hovering do hover_help_text("Add new track", add_track_btn.box)
-		if add_track_btn.clicked  do track_add_new(app.audio)
-		track_width :: 190
-		audio_tracks: {
-			track_vlist := virtual_list(
-				{
-					size = {
-						{.Fit_Children, 1},
-						// We hardcode the height of the topbar otherwise the layout gets annoying.
-						{.Fixed, f32(app.wy - TOPBAR_HEIGHT)},
-					},
-					max_size = {app.wx, app.wy}
-				},
-				{
-					direction      = .Horizontal,
-					gap_horizontal = 3,
-				},
-				len(app.audio.tracks),
-				track_width,
-				box_flags = {.Scrollable}
-			)
+	text_button("hello stinky", {size={{.Fixed, 150}, {.Fixed, 30}}, margin = {top = 5}, text_color = .Red_800})
 
-			// Draw vertical column of step numbers
-			step_num_col_box: ^Box 
-			number_col: {
-				if ui_state.frame_num == 0 do break number_col
-				steps_container_height := ui_state.box_cache["track-0-steps-container"].height
-				step_num_col_box = child_container(
-					{
-						size = {{.Fit_Children, 1}, {.Fixed, f32(steps_container_height)}},
-						margin = {top = 38, left=5, right=5},
-						overflow_y = .Scroll
-					},
-					{direction = .Vertical},
-					box_flags = {}
-				).box
-				// Janky solution to get pixel perfect step number column sizing. We hardcode one of the 
-				// audio tracks steps container and use that as a reference for figruing out the height of the
-				// step numbers
-				// This must match the ratio calculation in audio_track().
-				step_height_ratio := f32(ui_state.show_mixer ? 1.0 / (54.0 * 0.7) : 1.0 / (80.0 * 0.7))
-				step_height_px := f32(steps_container_height) * step_height_ratio
-				for i in 0 ..< N_TRACK_STEPS {
-					sig := text(
-						tprintf("{}", i),
-						{
-							text_justify = {.End, .Center},
-							size={{.Fit_Text_And_Grow, 1}, {.Fixed, step_height_px}}
-						},
-						extra_flags = {.Clickable},
-					)
-					if sig.clicked do audio_seek_to_step(i)
-				}
-			}
-
-			// Ugliness required to scroll container in sync.
-			arena, scratch := arena_allocator_new("container-scroll-sync")	
-			defer arena_allocator_destroy(arena, scratch)
-			step_containers := make([]^Box, len(app.audio.tracks), scratch)
-
-			for i in track_vlist.first_visible ..= track_vlist.last_visible {
-				audio_track(i, track_width, &step_containers)
-			}
-
-			scrolled_container : ^Box
-			for box in step_containers {
-				if box == nil do continue
-				if box.signals.scrolled_up || box.signals.scrolled_down {
-					scrolled_container = box
-					break
-				}
-			}
-
-			if scrolled_container != nil {
-				for box in step_containers { 
-					if box == nil do continue
-					box.signals.scrolled_up = scrolled_container.signals.scrolled_up
-					box.signals.scrolled_down = scrolled_container.signals.scrolled_down
-				}
-				step_num_col_box.signals.scrolled_up = scrolled_container.signals.scrolled_up
-				step_num_col_box.signals.scrolled_down = scrolled_container.signals.scrolled_down
-			}
-		}
-	}
-	else {
-		offset_x := f32(animation_get("ani_x", 200))
-		offset_y := f32(animation_get("ani_y", 60))
-		if text_button(
-			"animate me :)",
-			{
-				floating_type = .Absolute_Pixel,
-				floating_offset = {offset_x, offset_y},
-				size = {{.Fixed, offset_x}, {.Fixed, offset_y}},
-				color = .Warning
-			}
-		).clicked {
-			animation_start("ani_x", 20, 1)
-			animation_start("ani_y", 6, 1)
-		}
-	}
-
-	if ui_state.context_menu.active {
-		context_menu()
-	}
-
-	if ui_state.sidebar_shown || animation_is_running("browser-offset-x"){
-		x_offset := animation_get("browser-offset-x", ui_state.sidebar_shown ? 1.0 : 2.0)
-		child_container(
-			{
-				floating_type   = .Relative_Root,
-				floating_offset = {f32(x_offset), 0},
-				padding 		= {top = TOPBAR_HEIGHT}
-			},
-			{}
-		)
-		file_browser_menu(ui_state.file_browser_allocator)
-	}
-
-	// Render current dragging item under the mouse if applicable.
 	if ui_state.dragged_box != nil {
 		dragged_box := ui_state.dragged_box.(^Box)
 		if .Drag_Drop_Source in dragged_box.flags {
-			// printfln("dragging: {}", dragged_box.id)
-			// printfln("droppable data is: {}", ui_state.dropped_data[:])
 			cfg := dragged_box.config
 			cfg.floating_type = .Absolute_Pixel
 			cfg.floating_offset = {f32(app.mouse.pos.x), f32(app.mouse.pos.y)}
@@ -559,7 +406,6 @@ create_ui :: proc() -> ^Box {
 	// 	)
 	// }
 
-	// animation_update_all()
 	start := time.now()._nsec
 	sizing_calc_percent_width(root)
 	sizing_calc_percent_height(root)
@@ -567,15 +413,16 @@ create_ui :: proc() -> ^Box {
 	sizing_grow_growable_width(root)
 	recalc_fit_children_sizing(root)
 	position_boxes(root)
+	flow_z_positions(root)
 
 	end := time.now()._nsec
 	total_layout_time := (end - start) / 1000
 
-	flow_z_positions(root)
 
 	ui_end_time := time.now()._nsec
 	total_ui_creation_time := (ui_end_time - ui_start_time) / 1000
 	// printfln("this frame took {} microseconds to create, layout and draw", total_ui_creation_time)
+
 	return root
 }
 

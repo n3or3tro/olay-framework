@@ -1,16 +1,11 @@
-package app
+package olay
 import "core:fmt"
 import "core:mem"
-import "core:math"
-import "core:sync"
 import "vendor:kb_text_shape"
-import "core:thread"
 import "core:time"
 import gl "vendor:OpenGL"
 import sdl "vendor:sdl2"
-import str "core:strings"
 import "core:sys/windows"
-import vmem "core:mem/virtual"
 import "core:os"
 
 Mode :: enum { 
@@ -47,27 +42,14 @@ App :: struct {
 	curr_chars_stored: 		  u32,
 	wx:                		  int,
 	wy:                		  int,
-	audio:             		  ^Audio_State,
-	browser_root_dir:  		  ^Browser_Directory,
-	browser_selected_dir:     ^Browser_Directory,
 	running:           		  bool,
 	windows_com_handle:		  windows.HRESULT,
 	win32_hwnd:				  windows.HWND,
 	win32_original_wndproc:	  windows.WNDPROC,
-	ui_refresh_thread: 		  ^thread.Thread,
-	audio_update_thread: 	  ^thread.Thread,
-	track_arena: 			   vmem.Arena,
-	track_allocator: 		   mem.Allocator,
 	memory_profiler: 		   Memory_Profiler,
 	selected_track: 		   int,	
 	last_undo_commit_frame:    u64,
-	temp_stack: 			   [dynamic]Undo_Item,
-	undo_stack: 			   [dynamic]Undo_Item,
-	redo_stack: 			   [dynamic]Undo_Item,
 }
-
-
-
 
 Window :: sdl.Window
 
@@ -200,30 +182,12 @@ app_init :: proc(first_run := true) -> ^App {
 	ui_state = app.ui_state
 	ui_state.parents_stack = make([dynamic]^Box)
 
-	track_arena_buf := make([]byte, size_of(Track) * 128)
-	err := vmem.arena_init_buffer(&app.track_arena, track_arena_buf)
-	assert(err == .None)
-	app.track_allocator = vmem.arena_allocator(&app.track_arena)
-
 	init_ui_state()
-
-	root_dir := new(Browser_Directory)
-	root_dir.name = str.clone("Root dir")
-	app.browser_selected_dir = root_dir
-	app.browser_root_dir     = root_dir
 
 	font_init(&ui_state.font_state)
 	icons_init(&ui_state.icon_state)
 
-	file_browser_read_from_disk()
-
-	app.audio = audio_init()
-	audio_init_miniaudio(app.audio)
-
 	app.running = true
-
-	app.ui_refresh_thread   = thread.create_and_start(ui_refresh_thread_proc, priority = .High)
-	app.audio_update_thread = thread.create_and_start(audio_thread_timing_proc, priority = .High)
 
 	// This a per thread thing that will persist across hot reloads, so we set it up once only
 	when ODIN_OS == .Windows {
@@ -341,10 +305,6 @@ app_hot_reload :: proc(mem: rawptr) {
 	ui_state = app.ui_state
 	font_init(&ui_state.font_state)
 	icons_init(&ui_state.icon_state)
-	audio_init_miniaudio(app.audio)
-	sync.atomic_store(&app.audio.exit_timing_thread, false)
-	app.ui_refresh_thread   = thread.create_and_start(ui_refresh_thread_proc, priority = .High)
-	app.audio_update_thread = thread.create_and_start(audio_thread_timing_proc, priority = .High)
 	when ODIN_OS == .Windows {
 		resubclass_wndproc()
 	}
@@ -357,17 +317,6 @@ app_reload_colors :: proc(mem: rawptr, color_file_path: string) {
 	data, err := os.read_entire_file_from_path(color_file_path, context.temp_allocator)
 	assert(err == os.General_Error.None)
 	app.ui_state.dark_theme = parse_json_token_color_mapping(data)
-}
-
-// This needs to run before we unload the DLL due to miniaudio spawning background threads that will
-// continue to run after we've unloaded the DLL and crash the program.
-@(export)
-app_unload_miniaudio :: proc() {
-	sync.atomic_store(&app.audio.exit_timing_thread, true)
-	sync.cond_broadcast(&app.audio.playing_cond)
-	// Wait for audio timing thread to pickup that it should terminate.
-	thread.join_multiple(app.ui_refresh_thread, app.audio_update_thread)
-	audio_uninit_miniaudio()
 }
 
 @(export)
@@ -403,10 +352,6 @@ app_reset_state :: proc() {
 	delete(app.ui_state.parents_stack)
 	delete(app.ui_state.dark_theme)
 	free(app.ui_state)
-
-	// Audio state maybe needs to be cleared..
-	app.browser_root_dir = nil
-	app.browser_selected_dir = nil
 }
 
 @(export)
@@ -446,61 +391,6 @@ app_shutdown :: proc() {
 handle_keyboard_shortcuts :: proc() {
 	n_handled :u32= 0
 	for i in 0 ..< app.curr_chars_stored {
-		curr_ch := app.char_queue[i]
-		#partial switch curr_ch {
-		case .SPACE:
-			if app.audio.playing {
-				audio_transport_pause()
-			} else {
-				audio_transport_play()
-			}
-			n_handled += 1
-		case .ESCAPE:
-			ui_state.context_menu.active = false
-			n_handled += 1
-		case .R:
-			audio_transport_reset()
-			n_handled += 1
-		case .M:
-			ui_state.show_mixer = !ui_state.show_mixer
-			n_handled += 1
-		case .B:
-			ui_state.sidebar_shown = !ui_state.sidebar_shown
-			if ui_state.sidebar_shown {
-				animation_start("browser-offset-x", 2.0, 0.2)
-			}  else { 
-				animation_start("browser-offset-x", 1.0, 0.4)
-			}
-			n_handled += 1
-		case .T:
-			if app.keys_held[sdl.Scancode.LCTRL] || app.keys_held[sdl.Scancode.RCTRL] { 
-				track_add_new(app.audio)
-				n_handled += 1
-			}
-		case .DELETE, .BACKSPACE:
-			track_delete(app.selected_track)
-			n_handled += 1
-		case .RIGHT, .L:
-			if app.keys_held[sdl.Scancode.LCTRL] || app.keys_held[sdl.Scancode.RCTRL] { 
-				app.selected_track = min(app.selected_track + 1, len(app.audio.tracks))
-			}
-			n_handled += 1
-		case .LEFT, .H:
-			if app.keys_held[sdl.Scancode.LCTRL] || app.keys_held[sdl.Scancode.RCTRL] { 
-				app.selected_track = max(app.selected_track - 1, 0)
-			}
-			n_handled += 1
-		case .W:
-			ui_state.show_track_waveforms = !ui_state.show_track_waveforms
-		case .Z:
-			if app.keys_held[sdl.Scancode.LCTRL] || app.keys_held[sdl.Scancode.RCTRL] {
-				undo()
-			}
-		case .Y:
-			if app.keys_held[sdl.Scancode.LCTRL] || app.keys_held[sdl.Scancode.RCTRL] {
-				redo()
-			}
-		}
 	}
 	app.curr_chars_stored -= n_handled
 }

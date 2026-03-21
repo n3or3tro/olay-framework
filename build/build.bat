@@ -45,8 +45,8 @@ if %SANITIZE%==1 (
     set EXE_FLAGS=!EXE_FLAGS! -sanitize:address -linker:radlink
 )
 
-echo [dll] odin build src/app %DLL_FLAGS% -out:build/app.dll
-odin build src/app %DLL_FLAGS% -out:build/app.dll
+echo [dll] odin build src/olay %DLL_FLAGS% -out:build/app.dll
+odin build src/olay %DLL_FLAGS% -out:build/app.dll
 if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
 
 echo [exe] odin build src %EXE_FLAGS% -debug -out:build/app-reloadable.exe

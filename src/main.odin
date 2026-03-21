@@ -1,5 +1,5 @@
 package main
-import "app"
+import app "olay"
 import "base:runtime"
 import "core:dynlib"
 import "core:fmt"
@@ -15,8 +15,8 @@ PROFILING :: #config(profile, false)
 MODE_RELEASE :: #config(release, false)
 MODE_HOT_RELOAD :: #config(hot_reload, true)
 
-VERTEX_SHADER_PATH :: "src/app/shaders/box_vertex_shader.glsl"
-PIXEL_SHADER_PATH  :: "src/app/shaders/box_pixel_shader.glsl"
+VERTEX_SHADER_PATH :: "src/olay/shaders/box_vertex_shader.glsl"
+PIXEL_SHADER_PATH  :: "src/olay/shaders/box_pixel_shader.glsl"
 
 DLL_PATH :: "build/app." + dynlib.LIBRARY_FILE_EXTENSION
 // when MODE_RELEASE {
@@ -42,7 +42,6 @@ App_API :: struct {
 	init_window:       		 proc(),
 	create_gl_context: 		 proc(),
 	load_gl_procs:     		 proc(),
-	unload_miniaudio:  		 proc(),
 	update:            		 proc() -> bool,
 	memory:            		 proc() -> rawptr,
 	memory_size:       		 proc() -> int,
@@ -89,7 +88,6 @@ when PROFILING {
 api: App_API
 
 main :: proc() {
-	// windows.timeBeginPeriod(1)
 	when MODE_HOT_RELOAD {
 		run_hot_reload_mode()
 	}
@@ -98,7 +96,6 @@ main :: proc() {
 	when MODE_RELEASE {
 		run_release_mode()
 	}
-	// windows.timeEndPeriod(1)
 }
 
 run_release_mode :: proc() {
@@ -180,13 +177,11 @@ run_hot_reload_mode :: proc() {
 	for {
 		if api.wants_restart() {
 			println("restarting app...")
-			api.unload_miniaudio()
 			api.reset_state()
 			api.init(first_run=false)
 			api.load_gl_procs()
 		}
 		if should_reload_dll() || api.wants_reload() {
-			api.unload_miniaudio()
 			old_mem := api.memory()
 			load_dll()
 			api.hot_reload(old_mem)
@@ -203,9 +198,7 @@ run_hot_reload_mode :: proc() {
 			time.sleep(time.Millisecond * 100)
 			api.reload_colors(api.memory(), COLOR_FILE_PATH)
 			t, err := os.last_write_time_by_name(COLOR_FILE_PATH)
-			if err != io.Error.None  { 
-				panic(tprintf("Failed to get last write time of {}", err))
-			}
+			if err != io.Error.None  do panic(tprintf("Failed to get last write time of {}", err))
 			api.last_edit_colors = t
 		}
 		if !api.update() do break
@@ -214,7 +207,7 @@ run_hot_reload_mode :: proc() {
 	api.shutdown()
 }
 
-// Calling dynlib.initiazlize_symbols, unloads the old dll, so you don't have to manually unload.
+// Calling dynlib.initiazlize_symbols, unloads the old dll, so you don't have to manually unload it.
 load_dll :: proc() {
 	new_dll_path := tprintf("build/app_{}.dll", api.version)
 	// Try multiple times since `odin build` doesn't release it's lock on the file straight away.
@@ -253,17 +246,13 @@ load_dll :: proc() {
 
 should_reload_colors :: proc() -> bool { 
 	time, err := os.last_write_time_by_name(COLOR_FILE_PATH)
-	if err != io.Error.None {
-		panic(tprintfln("{}", err))
-	}
+	if err != io.Error.None do panic(tprintfln("{}", err))
 	return time._nsec > api.last_edit_colors._nsec
 }
 
 should_reload_dll :: proc() -> bool {
 	time, err := os.last_write_time_by_name(DLL_PATH)
-	if err != io.Error.None {
-		panic(tprintfln("{}", err))
-	}
+	if err != io.Error.None do panic(tprintfln("{}", err))
 	return time._nsec > api.last_edit_dll._nsec
 }
 

@@ -1,13 +1,11 @@
-package app
+package olay
 import "core:flags"
-import "core:math"
 import "core:math/rand"
 import "core:fmt"
 import str "core:strings"
 import "core:time"
 import gl "vendor:OpenGL"
 import sdl "vendor:sdl2"
-import ma "vendor:miniaudio"
 
 WINDOW_HEIGHT :: 1000
 WINDOW_WIDTH :: 500
@@ -153,47 +151,6 @@ Box_Size :: struct {
 	amount: f32,
 }
 
-Metadata_Track_Step :: struct { 
-	track: 	int,
-	step: 	int, 
-	type: 	enum { 
-		Pitch, Volume, Chop, Send2
-	}
-}
-
-Metadata_Track :: struct { 
-	track_num: int	
-}
-
-Metadata_Sampler :: struct { 
-	track_num : int,
-}
-
-Metadata_Waveform :: struct {
-	track_num: int,
-}
-
-Metadata_Browser_Waveform :: struct { 
-	sound: ^ma.sound
-}
-
-Metadata_Browser_Item :: struct {
-	dir: ^Browser_Directory,
-}
-
-Metadata_EQ_Handle :: struct { 
-	which: int,
-	track_num: int,
-	band: ^EQ_Band_State,
-}
-
-Metadata_Audio_Spectrum :: struct {
-	// This will be ultimately passed into the pixel shader so it nows
-	// which row of the specturm_data to sample from.
-	// which_eq : int
-	track_num: int,
-}
-
 Metadata_Knob :: struct { 
 	min, max, val: f32,
 	logarithmic: bool,
@@ -202,15 +159,7 @@ Metadata_Knob :: struct {
 // Probably a little wasteful to have something like this to just denote that a 
 // box is a specific type of widget.
 Box_Metadata :: union {
-	Metadata_Track_Step,
-	Metadata_Track,
-	Metadata_Sampler,
-	Metadata_Browser_Item,
-	Metadata_EQ_Handle,
-	Metadata_Audio_Spectrum,
 	Metadata_Knob,
-	Metadata_Waveform,
-	Metadata_Browser_Waveform,
 }
 
 Box_Flag :: enum {
@@ -617,7 +566,6 @@ handle_input :: proc(event: sdl.Event) -> (exit: bool) {
 				app.mouse.drag_start = app.mouse.pos
 				app.mouse.dragging = true
 				app.mouse.drag_done = false
-				// show_context_menu = false
 			}
 			app.mouse.left_pressed = true
 		case sdl.BUTTON_RIGHT:
@@ -630,8 +578,6 @@ handle_input :: proc(event: sdl.Event) -> (exit: bool) {
 		case sdl.BUTTON_LEFT:
 			if app.mouse.left_pressed {
 				app.mouse.clicked = true
-				undo_commit()
-				clear(&app.temp_stack)
 			}
 			app.mouse.left_pressed = false
 			app.mouse.drag_end = app.mouse.pos
@@ -648,19 +594,7 @@ handle_input :: proc(event: sdl.Event) -> (exit: bool) {
 		}
 	}
 
-	// if etype == .DROPFILE {
-	// 	which, on_track := dropped_on_track()
-	// 	if on_track {
-	// 		printfln("file was dropped on track {}", which)
-	// 	}
-	// 	assert(on_track)
-	// 	if on_track {
-	// 		set_track_sound(event.drop.file, which)
-	// 	}
-	// }
-
 	return exit
-	// return exit, show_context_menu
 }
 
 register_resize :: proc() -> bool {

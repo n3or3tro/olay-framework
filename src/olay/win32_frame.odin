@@ -1,5 +1,5 @@
 #+build windows
-package app
+package olay
 
 import "base:runtime"
 import "core:sys/windows"
