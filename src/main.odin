@@ -1,5 +1,4 @@
 package main
-import app "olay"
 import "base:runtime"
 import "core:dynlib"
 import "core:fmt"
@@ -9,6 +8,7 @@ import "core:os"
 import "core:prof/spall"
 import "core:sync"
 import "core:time"
+import app "olay"
 
 
 PROFILING :: #config(profile, false)
@@ -16,7 +16,7 @@ MODE_RELEASE :: #config(release, false)
 MODE_HOT_RELOAD :: #config(hot_reload, true)
 
 VERTEX_SHADER_PATH :: "src/olay/shaders/box_vertex_shader.glsl"
-PIXEL_SHADER_PATH  :: "src/olay/shaders/box_pixel_shader.glsl"
+PIXEL_SHADER_PATH :: "src/olay/shaders/box_pixel_shader.glsl"
 
 DLL_PATH :: "build/app." + dynlib.LIBRARY_FILE_EXTENSION
 // when MODE_RELEASE {
@@ -35,31 +35,31 @@ tprintf :: fmt.tprintf
 tprintfln :: fmt.aprintfln
 
 
-
 App_API :: struct {
-	create:            		 proc() -> ^app.App,
-	init:              		 proc(first_run: bool = true),
-	init_window:       		 proc(),
-	create_gl_context: 		 proc(),
-	load_gl_procs:     		 proc(),
-	update:            		 proc() -> bool,
-	memory:            		 proc() -> rawptr,
-	memory_size:       		 proc() -> int,
-	store_tracking_allocator:proc(string, ^mem.Tracking_Allocator),
-	store_og_allocator:      proc(mem.Allocator),
-	should_run:        		 proc() -> bool,
-	wants_reload:      		 proc() -> bool,
-	wants_restart:     		 proc() -> bool,
-	reset_state:			 proc(),
-	hot_reload:        		 proc(mem: rawptr) -> bool,
-	shutdown:          		 proc(),
-	reload_colors:     		 proc(mem: rawptr, color_file_path: string),
-	last_edit_colors:  		 time.Time,
-	reload_shaders:			 proc(),
-	last_edit_shaders: 		 time.Time,
-	last_edit_dll:     		 time.Time,
-	version:           		 int,
-	lib:               		 dynlib.Library,
+	create:                   proc() -> ^app.App,
+	init:                     proc(first_run: bool = true),
+	win32_post_reload:        proc(),
+	init_window:              proc(),
+	create_gl_context:        proc(),
+	load_gl_procs:            proc(),
+	update:                   proc() -> bool,
+	memory:                   proc() -> rawptr,
+	memory_size:              proc() -> int,
+	store_tracking_allocator: proc(_: string, _: ^mem.Tracking_Allocator),
+	store_og_allocator:       proc(_: mem.Allocator),
+	should_run:               proc() -> bool,
+	wants_reload:             proc() -> bool,
+	wants_restart:            proc() -> bool,
+	reset_state:              proc(),
+	hot_reload:               proc(mem: rawptr) -> bool,
+	shutdown:                 proc(),
+	reload_colors:            proc(mem: rawptr, color_file_path: string),
+	last_edit_colors:         time.Time,
+	reload_shaders:           proc(),
+	last_edit_shaders:        time.Time,
+	last_edit_dll:            time.Time,
+	version:                  int,
+	lib:                      dynlib.Library,
 }
 
 when PROFILING {
@@ -178,27 +178,28 @@ run_hot_reload_mode :: proc() {
 		if api.wants_restart() {
 			println("restarting app...")
 			api.reset_state()
-			api.init(first_run=false)
+			api.init(first_run = false)
 			api.load_gl_procs()
 		}
 		if should_reload_dll() || api.wants_reload() {
 			old_mem := api.memory()
 			load_dll()
 			api.hot_reload(old_mem)
+			if api.win32_post_reload != nil do api.win32_post_reload()
 			api.load_gl_procs()
 			println("hot reloaded, kept state")
 		}
-		if should_reload_shaders() { 
+		if should_reload_shaders() {
 			api.reload_shaders()
 			t_vert, _ := os.last_write_time_by_name(VERTEX_SHADER_PATH)
 			t_frag, _ := os.last_write_time_by_name(PIXEL_SHADER_PATH)
-			api.last_edit_shaders._nsec = max(t_vert._nsec, t_frag._nsec)	
+			api.last_edit_shaders._nsec = max(t_vert._nsec, t_frag._nsec)
 		}
-		if should_reload_colors() { 
+		if should_reload_colors() {
 			time.sleep(time.Millisecond * 100)
 			api.reload_colors(api.memory(), COLOR_FILE_PATH)
 			t, err := os.last_write_time_by_name(COLOR_FILE_PATH)
-			if err != io.Error.None  do panic(tprintf("Failed to get last write time of {}", err))
+			if err != io.Error.None do panic(tprintf("Failed to get last write time of {}", err))
 			api.last_edit_colors = t
 		}
 		if !api.update() do break
@@ -240,11 +241,11 @@ load_dll :: proc() {
 		panic(tprintfln("{}", check_time_err))
 	}
 	api.last_edit_dll = edit_time
-	api.version += 1
+	api.version       += 1
 	printfln("Loaded DLL from {}", new_dll_path)
 }
 
-should_reload_colors :: proc() -> bool { 
+should_reload_colors :: proc() -> bool {
 	time, err := os.last_write_time_by_name(COLOR_FILE_PATH)
 	if err != io.Error.None do panic(tprintfln("{}", err))
 	return time._nsec > api.last_edit_colors._nsec
@@ -256,10 +257,10 @@ should_reload_dll :: proc() -> bool {
 	return time._nsec > api.last_edit_dll._nsec
 }
 
-should_reload_shaders :: proc() -> bool { 
+should_reload_shaders :: proc() -> bool {
 	t_vert, err_v := os.last_write_time_by_name(VERTEX_SHADER_PATH)
-    t_frag, err_f := os.last_write_time_by_name(PIXEL_SHADER_PATH)
-    if err_v != io.Error.None || err_f != io.Error.None { return false }
-    latest := max(t_vert._nsec, t_frag._nsec)
-    return latest > api.last_edit_shaders._nsec	
+	t_frag, err_f := os.last_write_time_by_name(PIXEL_SHADER_PATH)
+	if err_v != io.Error.None || err_f != io.Error.None {return false}
+	latest := max(t_vert._nsec, t_frag._nsec)
+	return latest > api.last_edit_shaders._nsec
 }

@@ -2,30 +2,37 @@ package olay
 // import sarr "core:container/small_array"
 import "core:encoding/json"
 import "core:fmt"
-import "core:mem"
-import "core:os"
 import "core:reflect"
 import "core:strconv"
 import str "core:strings"
 import "core:time"
 import gl "vendor:OpenGL"
 import sdl "vendor:sdl2"
-import vmem "core:mem/virtual"
 
 DARK_THEME_FILE_DATA :: #load("../../util/dark-theme.json")
 EXPECTED_FRAME_TIME_SECONDS :: 0.00833333
 id :: fmt.tprintf
 
+//odinfmt: disable
 // Short hand pre-defined semantic_size values that we commonly use.
-Size_Fit_Children :: [2]Box_Size{{.Fit_Children, 1}, {.Fit_Children, 1}}
-Size_Fit_Children_And_Grow :: [2]Box_Size{{.Fit_Children_And_Grow, 1}, {.Fit_Children_And_Grow, 1}}
-Size_Grow :: [2]Box_Size{{.Grow, 1}, {.Grow, 1}}
-Size_Fit_Text :: [2]Box_Size{{.Fit_Text, 1}, {.Fit_Text, 1}}
-Size_Fit_Text_And_Grow :: [2]Box_Size{{.Fit_Text_And_Grow, 1}, {.Fit_Text_And_Grow, 1}}
+Size_Fit_Children 			:: [2]Box_Size{{.Fit_Children, 1}, {.Fit_Children, 1}}
+Size_Fit_Children_And_Grow 	:: [2]Box_Size{{.Fit_Children_And_Grow, 1}, {.Fit_Children_And_Grow, 1}}
+Size_Grow 					:: [2]Box_Size{{.Grow, 1}, {.Grow, 1}}
+Size_Fit_Text 				:: [2]Box_Size{{.Fit_Text, 1}, {.Fit_Text, 1}}
+Size_Fit_Text_And_Grow 		:: [2]Box_Size{{.Fit_Text_And_Grow, 1}, {.Fit_Text_And_Grow, 1}}
+//odinfmt: enable
 
 UI_State :: struct {
+	test_string:              string,
 	root:                     ^Box,
+	wx:                       int,
+	wy:                       int,
 	box_cache:                map[string]^Box,
+	char_queue:               [128]Scancode,
+	keys_held:                [NUM_SCANCODES]bool,
+	mouse:                    Mouse_State,
+	mouse_last_frame:         Mouse_State,
+	n_chars_stored:           u32,
 	// I.e. the node which will parent future children if children_open() has been called.
 	parents_top:              ^Box,
 	parents_stack:            [dynamic]^Box,
@@ -35,13 +42,11 @@ UI_State :: struct {
 	quad_vabuffer:            ^u32,
 	quad_shader_program:      u32,
 	blur_shader_program:      u32,
-	tex_id_font_atlas:    	  u32,
-	fbo_id_offscreen_ui: 	  u32,
-	tex_id_offscreen_ui: 	  u32,
-	fbo_id_blurred_ui: 	  	  u32,
-	tex_id_blurred_ui: 	  	  u32,
-	tex_id_freq_spectrum:	  u32,
-	tex_id_freq_response: 	  u32,
+	tex_id_font_atlas:        u32,
+	fbo_id_offscreen_ui:      u32,
+	tex_id_offscreen_ui:      u32,
+	fbo_id_blurred_ui:        u32,
+	tex_id_blurred_ui:        u32,
 	frame_num:                u64,
 	hot_box:                  ^Box,
 	active_box:               ^Box,
@@ -70,7 +75,7 @@ UI_State :: struct {
 		show_remove_step_menu: bool,
 	},
 	font_state:               Font_State,
-	icon_state: 			  Font_State,
+	icon_state:               Font_State,
 	tab_num:                  int,
 	// Indicates whether we triggered anything that would cause us to swap UI screens
 	// and therefore we need to clear the box cache.
@@ -79,7 +84,7 @@ UI_State :: struct {
 	// text boxes on screen at one time.
 	text_editors_state:       map[string]Edit_Text_State,
 	sidebar_shown:            bool,
-	// If this is nil, it's because no box is being dragged.
+	// Box is nil when no box is dragged... now that I look at it, not sure why we need an optional and a pointer...
 	dragged_box:              Maybe(^Box),
 	drag_offset:              [2]int,
 	dropped_data:             [dynamic]Drop_Data,
@@ -91,92 +96,93 @@ UI_State :: struct {
 	draggable_window_offsets: map[string]Draggable_Window_Metadata,
 	// Necessary shared state for animations. Could definitely live on a pool based allocator.
 	animations:               [N_MAX_ANIMATIONS]Animation_Item,
-	animations_stored:		  int,
+	animations_stored:        int,
 	// Whether or not a track's eq is showing.
 	// Maps scrollable containers id to the amount of offset to apply to their scrolled children in px.
-	scroll_offsets: map[string]int,
-	frames_since_sleep: 	i8,
-	event_wait_timeout: 	f64,
-	prev_frame_start_ms: 	f64,
+	scroll_offsets:           map[string]int,
+	frames_since_sleep:       i8,
+	event_wait_timeout:       f64,
+	prev_frame_start_ms:      f64,
 }
 
-Draggable_Window_Metadata :: struct { 
-	opened: bool,
-	maximised: bool,
+Draggable_Window_Metadata :: struct {
+	opened:      bool,
+	maximised:   bool,
 	// 0-1 range of how far from root's top_left.
-	offset: [2]f32,
-	dragging: bool,
+	offset:      [2]f32,
+	dragging:    bool,
 	grab_offset: [2]f32,
 	// offset_at_drag_start: [2]f32
 }
 
 // These are all the types of data that can be dropped on items that are drag-and-drop
-// enabled.
+// enabled. We need to figure out a way for a user to extend this so they can easilly integrate UI layer
+// supported drag and drop.
 Drop_Data :: union {
 	string,
 	int,
 	f32,
 }
 
-State_Change_Type :: enum {
-	Track_Step,
-	Track_Volume,
-	Track_Arm_State,
-	// Old / new values will be the file path or maybe an index into locally loaded sounds.
-	Track_Sound,
+frame_begin :: proc() -> (root_signals: Box_Signals) {
+	// Collect frame signals for this frame based on what the tree just looked like at the end of the prev frame.
+	if ui_state.frame_num > 1 {
+		collect_frame_signals(ui_state.root)
+	}
+
+	for _, box in ui_state.box_cache do box.keep = false
+
+	ui_state.changed_ui_screen = false
+
+	root := box_from_cache(
+		{.Draw, .Glow, .Clickable},
+		{
+			size  = {{.Fixed, f32(app.wx)}, {.Fixed, f32(app.wy)}},
+			color = .Inverse_On_Surface,
+		},
+		// Mandatory ID in the entire UI. DON'T REMOVE IT !!
+		id = "root",
+	)
+	ui_state.root = root
+	box_open_children(root, {direction = .Vertical})
+	return box_signals(root)
 }
 
-Track_Step_Change :: struct {
-	type:      enum {
-		Pitch,
-		Volume,
-		Chop,
-		Send2,
-	},
-	track:     int,
-	step:      int,
-	old_value: int,
-	new_value: int,
+end_frame :: proc(root: ^Box, render_data_allocator := context.allocator) -> [dynamic]Rect_Render_Data {
+	// Draw drag and drop ghost box.
+	if ui_state.dragged_box != nil {
+		dragged_box := ui_state.dragged_box.(^Box)
+		if .Drag_Drop_Source in dragged_box.flags {
+			cfg                := dragged_box.config
+			cfg.floating_type   = .Absolute_Pixel
+			cfg.floating_offset = {f32(ui_state.mouse.pos.x), f32(ui_state.mouse.pos.y)}
+			cfg.z_index         = 100
+			drag_ghost         := box_from_cache({.Draw}, cfg, "the ghost", tprintf("{}-drag-ghost", dragged_box.id))
+		}
+	}
+	box_regular_close_children(root.signals)
+
+	start := time.now()._nsec
+	sizing_calc_percent_width(root)
+	sizing_calc_percent_height(root)
+	sizing_grow_growable_height(root)
+	sizing_grow_growable_width(root)
+	recalc_fit_children_sizing(root)
+	position_boxes(root)
+	flow_z_positions(root)
+
+	return collect_render_data_from_ui_tree(root, render_data_allocator)
 }
 
-Track_Volume_Change :: struct {
-	track, step: int,
-	old_volume:  int,
-	new_value:   int,
-}
-
-Track_Arm_State_Change :: struct {
-	track, step: int,
-	old_value:   bool,
-	new_value:   bool,
-}
-
-Track_Sound_Change :: struct {
-	track, step: int,
-	old_value:   string,
-	new_value:   string,
-}
-
-
-State_Change :: union {
-	Track_Step_Change,
-	Track_Volume_Change,
-	Track_Arm_State_Change,
-	Track_Sound_Change,
-}
-
-init_ui_state :: proc() -> ^UI_State {
-	ui_state.quad_vbuffer = new(u32)
+init_ui_state :: proc(wx, wy: int) -> ^UI_State {
+	ui_state.quad_vbuffer  = new(u32)
 	ui_state.quad_vabuffer = new(u32)
 
-	ui_state.color_stack = make([dynamic]Color_RGBA)
-	ui_state.box_cache = make(map[string]^Box)
+	ui_state.color_stack   = make([dynamic]Color_RGBA)
+	ui_state.box_cache     = make(map[string]^Box)
 	ui_state.frame_signals = make(map[string]Box_Signals)
 
-	wx: i32 = 0
-	wy: i32 = 0
-	sdl.GetWindowSize(app.window, &wx, &wy)
-	app.wx, app.wy = int(wx), int(wy)
+	app.wx, app.wy = wx, wy
 
 	ui_state.frame_num = 0
 
@@ -215,10 +221,10 @@ init_ui_state :: proc() -> ^UI_State {
 	// Setup shader.
 	bind_shader(ui_state.quad_shader_program)
 	// Did it this way because was getting bugs with layout being wrong when using tiling WM on windows.
-	actual_w, actual_h: i32
-	sdl.GetWindowSize(app.window, &actual_w, &actual_h)
-	set_shader_vec2(ui_state.quad_shader_program, "screen_res", {f32(actual_w), f32(actual_h)})
-	setup_for_quads(&ui_state.quad_shader_program)
+	// actual_w, actual_h: i32
+	// sdl.GetWindowSize(app.window, &actual_w, &actual_h)
+	set_shader_vec2(ui_state.quad_shader_program, "screen_res", {f32(wx), f32(wy)})
+	gl_setup_for_quads(&ui_state.quad_shader_program)
 
 	// Setup font texture atlas.
 	atlas_texture_id: u32
@@ -227,15 +233,15 @@ init_ui_state :: proc() -> ^UI_State {
 	gl.BindTexture(gl.TEXTURE_2D, atlas_texture_id)
 
 	gl.TexImage2D(
-		gl.TEXTURE_2D,  	// target
-		0, 					// level (mipmap)
-		gl.R8,  			// internal format (8 bit red channel is most efficient apparently)
-		1024,   			// width
-		1024,   			// height
-		0, 	    			// border
-		gl.RED, 			// format of pixel data, i.e. where it looks to find the pixel info.
-		gl.UNSIGNED_BYTE,   // type of pixel data.
-		nil, 				// data -> nil as it's empty until we start rendering text.
+		gl.TEXTURE_2D, // target
+		0, // level (mipmap)
+		gl.R8, // internal format (8 bit red channel is most efficient apparently)
+		1024, // width
+		1024, // height
+		0, // border
+		gl.RED, // format of pixel data, i.e. where it looks to find the pixel info.
+		gl.UNSIGNED_BYTE, // type of pixel data.
+		nil, // data -> nil as it's empty until we start rendering text.
 	)
 	ui_state.tex_id_font_atlas = atlas_texture_id
 
@@ -251,10 +257,9 @@ init_ui_state :: proc() -> ^UI_State {
 	gl.BindTexture(gl.TEXTURE_2D, frequency_spectrum_tex_id)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.R32F, 512, 256, 0, gl.RED, gl.FLOAT, nil)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	ui_state.tex_id_freq_spectrum = frequency_spectrum_tex_id
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
 	// Create texture to store spectrum analyzed audio data.
 	frequency_response_tex_id: u32
@@ -263,10 +268,9 @@ init_ui_state :: proc() -> ^UI_State {
 	gl.BindTexture(gl.TEXTURE_2D, frequency_response_tex_id)
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.R32F, 512, 256, 0, gl.RED, gl.FLOAT, nil)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	ui_state.tex_id_freq_response = frequency_response_tex_id
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
 	// Let open gl know which texture we've uploaded corresponds to which of the variables
 	// that are defined in the shader code.
@@ -288,8 +292,8 @@ init_ui_state :: proc() -> ^UI_State {
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, i32(app.wx), i32(app.wy), 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,     gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, offscreen_ui_tex_id, 0)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	ui_state.fbo_id_offscreen_ui = offscreen_ui_fbo_id
@@ -307,8 +311,8 @@ init_ui_state :: proc() -> ^UI_State {
 	gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, i32(app.wx), i32(app.wy), 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.CLAMP_TO_EDGE)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,     gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blurred_ui_tex_id, 0)
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 	ui_state.fbo_id_blurred_ui = blurred_ui_fbo_id
@@ -317,113 +321,23 @@ init_ui_state :: proc() -> ^UI_State {
 	return ui_state
 }
 
-create_ui :: proc() -> ^Box {
-	// Collect frame signals for this frame based on what the tree just looked like at the end of the prev frame.
-	if ui_state.frame_num > 1 {
-		// Not sure if this is neccessary... turns out we crash if we do this, so disable it for now.
-		// clear(&ui_state.frame_signals)
-		collect_frame_signals(ui_state.root)
-	}
-
-	ui_start_time := time.now()._nsec
-	for _, box in ui_state.box_cache {
-		box.keep = false
-	}
-
-	ui_state.changed_ui_screen = false
-
-	root := child_container(
+create_ui :: proc() {
+	text_button(
+		"hello nikita",
 		{
-			size = {{.Fixed, f32(app.wx)}, {.Fixed, f32(app.wy)}},
-			color = .Inverse_On_Surface,
+			size       = {{.Fixed, 150}, {.Fixed, 30}},
+			margin     = {top = 5},
+			text_color = .Red_800,
 		},
-		{direction = .Vertical},
-		// This is basically the only mandatory ID in the entire UI. DON'T REMOVE IT!!
-		id = "root",
-		box_flags = {.Draw, .Glow, .Clickable},
-	).box
-	ui_state.root = root
-
-	text_button("hello stinky", {size={{.Fixed, 150}, {.Fixed, 30}}, margin = {top = 5}, text_color = .Red_800})
-
-	if ui_state.dragged_box != nil {
-		dragged_box := ui_state.dragged_box.(^Box)
-		if .Drag_Drop_Source in dragged_box.flags {
-			cfg := dragged_box.config
-			cfg.floating_type = .Absolute_Pixel
-			cfg.floating_offset = {f32(app.mouse.pos.x), f32(app.mouse.pos.y)}
-			cfg.z_index = 100
-			drag_ghost := box_from_cache({.Draw}, cfg, "the ghost", tprintf("{}-drag-ghost", dragged_box.id))
-		}
-	}
-
-	// Draw helper text in the bottom right corner
-	// {
-	// 	child_container(
-	// 		{
-	// 			size       = Size_Fit_Children,
-	// 			color               = .Surface_Variant,
-	// 			floating_type       = .Relative_Parent,
-	// 			floating_anchor_box = ui_state.root,
-	// 			floating_offset     = {1, 1},
-	// 		},
-	// 		{
-	// 			direction            = .Vertical,
-	// 			alignment_horizontal = .Start,
-	// 			gap_vertical         = 5,
-	// 		},
-	// 		"helper-text-bottom-right",
-	// 	)
-
-	// 	text(
-	// 		"F5 -> Hot reload DLL, keep data",
-	// 		{
-	// 			color         = .Warning_Container,
-	// 			text_justify  = {.Start, .Center},
-	// 			size = Size_Fit_Text,
-	// 		},
-	// 		"helper-text-1",
-	// 	)
-
-	// 	text(
-	// 		"F3 -> Hot reload DLL, clear data",
-	// 		{
-	// 			color         = .Warning_Container,
-	// 			text_justify  = {.Start, .Center},
-	// 			size = Size_Fit_Text,
-	// 		},
-	// 	)
-
-	// 	text(
-	// 		"F1 -> Restart, keep DLL, clear data",
-	// 		{
-	// 			color         = .Warning_Container,
-	// 			text_justify  = {.Start, .Center},
-	// 			margin = {bottom = 5},
-	// 			size = Size_Fit_Text,
-	// 		},
-	// 		"helper-text-3",
-	// 	)
-	// }
-
-	start := time.now()._nsec
-	sizing_calc_percent_width(root)
-	sizing_calc_percent_height(root)
-	sizing_grow_growable_height(root)
-	sizing_grow_growable_width(root)
-	recalc_fit_children_sizing(root)
-	position_boxes(root)
-	flow_z_positions(root)
-
-	end := time.now()._nsec
-	total_layout_time := (end - start) / 1000
-
-
-	ui_end_time := time.now()._nsec
-	total_ui_creation_time := (ui_end_time - ui_start_time) / 1000
-	// printfln("this frame took {} microseconds to create, layout and draw", total_ui_creation_time)
-
-	return root
+	)
+	edit_text_box(
+		{
+			size       = {{.Fixed, 200}, {.Fixed, 30}},
+			text_color = .Secondary,
+		},
+		.Generic_One_Line,
+		&ui_state.test_string,
+	)
 }
 
 /* 
@@ -443,10 +357,10 @@ reset_ui_state :: proc() {
 		ui_state.last_hot_box = ui_state.hot_box
 	}
 	ui_state.active_box = nil
-	ui_state.hot_box = nil
+	ui_state.hot_box    = nil
 
 	// if app.mouse_last_frame.clicked && !ui_state.clicked_on_context_menu {
-	if app.mouse_last_frame.clicked {
+	if ui_state.mouse_last_frame.clicked {
 		ui_state.context_menu.active = false
 	}
 	ui_state.clicked_on_context_menu = false
@@ -527,28 +441,248 @@ Semantic_Color_Token :: enum {
 	On_Inactive,
 
 	// Tailwind colors
-	Slate_50, Slate_100, Slate_200, Slate_300, Slate_400, Slate_500, Slate_600, Slate_700, Slate_800, Slate_900, Slate_950,
-	Gray_50, Gray_100, Gray_200, Gray_300, Gray_400, Gray_500, Gray_600, Gray_700, Gray_800, Gray_900, Gray_950,
-	Zinc_50, Zinc_100, Zinc_200, Zinc_300, Zinc_400, Zinc_500, Zinc_600, Zinc_700, Zinc_800, Zinc_900, Zinc_950,
-	Neutral_50, Neutral_100, Neutral_200, Neutral_300, Neutral_400, Neutral_500, Neutral_600, Neutral_700, Neutral_800, Neutral_900, Neutral_950,
-	Stone_50, Stone_100, Stone_200, Stone_300, Stone_400, Stone_500, Stone_600, Stone_700, Stone_800, Stone_900, Stone_950,
-	Red_50, Red_100, Red_200, Red_300, Red_400, Red_500, Red_600, Red_700, Red_800, Red_900, Red_950,
-	Orange_50, Orange_100, Orange_200, Orange_300, Orange_400, Orange_500, Orange_600, Orange_700, Orange_800, Orange_900, Orange_950,
-	Amber_50, Amber_100, Amber_200, Amber_300, Amber_400, Amber_500, Amber_600, Amber_700, Amber_800, Amber_900, Amber_950,
-	Yellow_50, Yellow_100, Yellow_200, Yellow_300, Yellow_400, Yellow_500, Yellow_600, Yellow_700, Yellow_800, Yellow_900, Yellow_950,
-	Lime_50, Lime_100, Lime_200, Lime_300, Lime_400, Lime_500, Lime_600, Lime_700, Lime_800, Lime_900, Lime_950,
-	Green_50, Green_100, Green_200, Green_300, Green_400, Green_500, Green_600, Green_700, Green_800, Green_900, Green_950,
-	Emerald_50, Emerald_100, Emerald_200, Emerald_300, Emerald_400, Emerald_500, Emerald_600, Emerald_700, Emerald_800, Emerald_900, Emerald_950,
-	Teal_50, Teal_100, Teal_200, Teal_300, Teal_400, Teal_500, Teal_600, Teal_700, Teal_800, Teal_900, Teal_950,
-	Cyan_50, Cyan_100, Cyan_200, Cyan_300, Cyan_400, Cyan_500, Cyan_600, Cyan_700, Cyan_800, Cyan_900, Cyan_950,
-	Sky_50, Sky_100, Sky_200, Sky_300, Sky_400, Sky_500, Sky_600, Sky_700, Sky_800, Sky_900, Sky_950,
-	Blue_50, Blue_100, Blue_200, Blue_300, Blue_400, Blue_500, Blue_600, Blue_700, Blue_800, Blue_900, Blue_950,
-	Indigo_50, Indigo_100, Indigo_200, Indigo_300, Indigo_400, Indigo_500, Indigo_600, Indigo_700, Indigo_800, Indigo_900, Indigo_950,
-	Violet_50, Violet_100, Violet_200, Violet_300, Violet_400, Violet_500, Violet_600, Violet_700, Violet_800, Violet_900, Violet_950,
-	Purple_50, Purple_100, Purple_200, Purple_300, Purple_400, Purple_500, Purple_600, Purple_700, Purple_800, Purple_900, Purple_950,
-	Fuchsia_50, Fuchsia_100, Fuchsia_200, Fuchsia_300, Fuchsia_400, Fuchsia_500, Fuchsia_600, Fuchsia_700, Fuchsia_800, Fuchsia_900, Fuchsia_950,
-	Pink_50, Pink_100, Pink_200, Pink_300, Pink_400, Pink_500, Pink_600, Pink_700, Pink_800, Pink_900, Pink_950,
-	Rose_50, Rose_100, Rose_200, Rose_300, Rose_400, Rose_500, Rose_600, Rose_700, Rose_800, Rose_900, Rose_950,
+	Slate_50,
+	Slate_100,
+	Slate_200,
+	Slate_300,
+	Slate_400,
+	Slate_500,
+	Slate_600,
+	Slate_700,
+	Slate_800,
+	Slate_900,
+	Slate_950,
+	Gray_50,
+	Gray_100,
+	Gray_200,
+	Gray_300,
+	Gray_400,
+	Gray_500,
+	Gray_600,
+	Gray_700,
+	Gray_800,
+	Gray_900,
+	Gray_950,
+	Zinc_50,
+	Zinc_100,
+	Zinc_200,
+	Zinc_300,
+	Zinc_400,
+	Zinc_500,
+	Zinc_600,
+	Zinc_700,
+	Zinc_800,
+	Zinc_900,
+	Zinc_950,
+	Neutral_50,
+	Neutral_100,
+	Neutral_200,
+	Neutral_300,
+	Neutral_400,
+	Neutral_500,
+	Neutral_600,
+	Neutral_700,
+	Neutral_800,
+	Neutral_900,
+	Neutral_950,
+	Stone_50,
+	Stone_100,
+	Stone_200,
+	Stone_300,
+	Stone_400,
+	Stone_500,
+	Stone_600,
+	Stone_700,
+	Stone_800,
+	Stone_900,
+	Stone_950,
+	Red_50,
+	Red_100,
+	Red_200,
+	Red_300,
+	Red_400,
+	Red_500,
+	Red_600,
+	Red_700,
+	Red_800,
+	Red_900,
+	Red_950,
+	Orange_50,
+	Orange_100,
+	Orange_200,
+	Orange_300,
+	Orange_400,
+	Orange_500,
+	Orange_600,
+	Orange_700,
+	Orange_800,
+	Orange_900,
+	Orange_950,
+	Amber_50,
+	Amber_100,
+	Amber_200,
+	Amber_300,
+	Amber_400,
+	Amber_500,
+	Amber_600,
+	Amber_700,
+	Amber_800,
+	Amber_900,
+	Amber_950,
+	Yellow_50,
+	Yellow_100,
+	Yellow_200,
+	Yellow_300,
+	Yellow_400,
+	Yellow_500,
+	Yellow_600,
+	Yellow_700,
+	Yellow_800,
+	Yellow_900,
+	Yellow_950,
+	Lime_50,
+	Lime_100,
+	Lime_200,
+	Lime_300,
+	Lime_400,
+	Lime_500,
+	Lime_600,
+	Lime_700,
+	Lime_800,
+	Lime_900,
+	Lime_950,
+	Green_50,
+	Green_100,
+	Green_200,
+	Green_300,
+	Green_400,
+	Green_500,
+	Green_600,
+	Green_700,
+	Green_800,
+	Green_900,
+	Green_950,
+	Emerald_50,
+	Emerald_100,
+	Emerald_200,
+	Emerald_300,
+	Emerald_400,
+	Emerald_500,
+	Emerald_600,
+	Emerald_700,
+	Emerald_800,
+	Emerald_900,
+	Emerald_950,
+	Teal_50,
+	Teal_100,
+	Teal_200,
+	Teal_300,
+	Teal_400,
+	Teal_500,
+	Teal_600,
+	Teal_700,
+	Teal_800,
+	Teal_900,
+	Teal_950,
+	Cyan_50,
+	Cyan_100,
+	Cyan_200,
+	Cyan_300,
+	Cyan_400,
+	Cyan_500,
+	Cyan_600,
+	Cyan_700,
+	Cyan_800,
+	Cyan_900,
+	Cyan_950,
+	Sky_50,
+	Sky_100,
+	Sky_200,
+	Sky_300,
+	Sky_400,
+	Sky_500,
+	Sky_600,
+	Sky_700,
+	Sky_800,
+	Sky_900,
+	Sky_950,
+	Blue_50,
+	Blue_100,
+	Blue_200,
+	Blue_300,
+	Blue_400,
+	Blue_500,
+	Blue_600,
+	Blue_700,
+	Blue_800,
+	Blue_900,
+	Blue_950,
+	Indigo_50,
+	Indigo_100,
+	Indigo_200,
+	Indigo_300,
+	Indigo_400,
+	Indigo_500,
+	Indigo_600,
+	Indigo_700,
+	Indigo_800,
+	Indigo_900,
+	Indigo_950,
+	Violet_50,
+	Violet_100,
+	Violet_200,
+	Violet_300,
+	Violet_400,
+	Violet_500,
+	Violet_600,
+	Violet_700,
+	Violet_800,
+	Violet_900,
+	Violet_950,
+	Purple_50,
+	Purple_100,
+	Purple_200,
+	Purple_300,
+	Purple_400,
+	Purple_500,
+	Purple_600,
+	Purple_700,
+	Purple_800,
+	Purple_900,
+	Purple_950,
+	Fuchsia_50,
+	Fuchsia_100,
+	Fuchsia_200,
+	Fuchsia_300,
+	Fuchsia_400,
+	Fuchsia_500,
+	Fuchsia_600,
+	Fuchsia_700,
+	Fuchsia_800,
+	Fuchsia_900,
+	Fuchsia_950,
+	Pink_50,
+	Pink_100,
+	Pink_200,
+	Pink_300,
+	Pink_400,
+	Pink_500,
+	Pink_600,
+	Pink_700,
+	Pink_800,
+	Pink_900,
+	Pink_950,
+	Rose_50,
+	Rose_100,
+	Rose_200,
+	Rose_300,
+	Rose_400,
+	Rose_500,
+	Rose_600,
+	Rose_700,
+	Rose_800,
+	Rose_900,
+	Rose_950,
 }
 
 Token_To_Color_Map :: map[Semantic_Color_Token]Color_RGBA
@@ -565,7 +699,7 @@ parse_json_token_color_mapping :: proc(file_data: []byte, allocator := context.a
 	}
 	#partial switch json_token_map in json_data {
 	case json.Object:
-		res := new(Token_To_Color_Map, allocator)
+		res         := new(Token_To_Color_Map, allocator)
 		token_names := reflect.enum_field_names(Semantic_Color_Token)
 		for color_token in Semantic_Color_Token {
 			// Added the snake case things, so just check that carefully if anything is broken now.
@@ -617,23 +751,12 @@ padding :: proc(amount: int) -> Box_Padding {
 }
 
 // Short hand helper functions for borders
-border_x :: proc(amount: int) -> Box_Border{
-	return Box_Border {
-		left = amount,
-		right = amount
-	}
+border_x :: proc(amount: int) -> Box_Border {
+	return Box_Border{left = amount, right = amount}
 }
-borer_y :: proc(amount: int) -> Box_Border{
-	return Box_Border {
-		top = amount,
-		bottom = amount
-	}
+borer_y :: proc(amount: int) -> Box_Border {
+	return Box_Border{top = amount, bottom = amount}
 }
-border :: proc(amount: int) -> Box_Border{
-	return Box_Border {
-		left   = amount,
-		top    = amount,
-		right  = amount,
-		bottom = amount,
-	}
+border :: proc(amount: int) -> Box_Border {
+	return Box_Border{left = amount, top = amount, right = amount, bottom = amount}
 }

@@ -9,14 +9,14 @@ import gl "vendor:OpenGL"
 import sdl "vendor:sdl2"
 
 QUAD_VERTEX_SHADER_PATH :: "src/olay/shaders/box_vertex_shader.glsl"
-QUAD_PIXEL_SHADER_PATH  :: "src/olay/shaders/box_pixel_shader.glsl"
+QUAD_PIXEL_SHADER_PATH :: "src/olay/shaders/box_pixel_shader.glsl"
 BLUR_VERTEX_SHADER_PATH :: "src/olay/shaders/blurring_vertex_shader.glsl"
-BLUR_PIXEL_SHADER_PATH  :: "src/olay/shaders/blurring_pixel_shader.glsl"
+BLUR_PIXEL_SHADER_PATH :: "src/olay/shaders/blurring_pixel_shader.glsl"
 
 QUAD_VERTEX_SHADER_AS_BYTES :: #load("../olay/shaders/box_vertex_shader.glsl")
-QUAD_PIXEL_SHADER_AS_BYTES  :: #load("../olay/shaders/box_pixel_shader.glsl")
+QUAD_PIXEL_SHADER_AS_BYTES :: #load("../olay/shaders/box_pixel_shader.glsl")
 BLUR_VERTEX_SHADER_AS_BYTES :: #load("../olay/shaders/blurring_vertex_shader.glsl")
-BLUR_PIXEL_SHADER_AS_BYTES  :: #load("../olay/shaders/blurring_pixel_shader.glsl")
+BLUR_PIXEL_SHADER_AS_BYTES :: #load("../olay/shaders/blurring_pixel_shader.glsl")
 
 
 shader_as_cstring :: proc(path: string) -> string {
@@ -26,9 +26,9 @@ shader_as_cstring :: proc(path: string) -> string {
 }
 
 create_shader :: proc(vshader_path: string, fshader_path: string) -> u32 {
-	vertex_shader := shader_as_cstring(vshader_path)
+	vertex_shader   := shader_as_cstring(vshader_path)
 	fragment_shader := shader_as_cstring(fshader_path)
-	shader_program := gl.CreateProgram()
+	shader_program  := gl.CreateProgram()
 
 	vs, verr := gl.compile_shader_from_source(vertex_shader, .VERTEX_SHADER)
 	fs, ferr := gl.compile_shader_from_source(fragment_shader, .FRAGMENT_SHADER)
@@ -87,12 +87,12 @@ create_and_bind_shader :: proc(vshader_path: string, fshader_path: string) -> u3
 }
 
 @(export)
-app_reload_shaders :: proc() { 
+app_reload_shaders :: proc() {
 	arena, scratch := arena_allocator_new("reload-shaders")
 	defer arena_allocator_destroy(arena, scratch)
 
 	new_shader_id, ok := gl.load_shaders_file(QUAD_VERTEX_SHADER_PATH, QUAD_PIXEL_SHADER_PATH)
-	if !ok { 
+	if !ok {
 		msg, type := gl.get_last_error_message()
 		printfln("Compiling new shaders failed with error: {}", msg)
 		println("Keeping old shaders loaded and continuing program.")
@@ -103,17 +103,17 @@ app_reload_shaders :: proc() {
 	ui_state.quad_shader_program = new_shader_id
 	bind_shader(ui_state.quad_shader_program)
 
-	actual_w, actual_h: i32
-    sdl.GetWindowSize(app.window, &actual_w, &actual_h)
-    set_shader_vec2(ui_state.quad_shader_program, "screen_res", {f32(actual_w), f32(actual_h)})
+	// actual_w, actual_h: i32
+	// sdl.GetWindowSize(app.window, &actual_w, &actual_h)
+	set_shader_vec2(ui_state.quad_shader_program, "screen_res", {f32(ui_state.wx), f32(ui_state.wy)})
 
-    gl.Uniform1i(gl.GetUniformLocation(ui_state.quad_shader_program, "font_atlas"), 0)
-    gl.Uniform1i(gl.GetUniformLocation(ui_state.quad_shader_program, "audio_frequency_spectrum"), 1)
-    gl.Uniform1i(gl.GetUniformLocation(ui_state.quad_shader_program, "blurred_ui"), 2)
+	gl.Uniform1i(gl.GetUniformLocation(ui_state.quad_shader_program, "font_atlas"), 0)
+	gl.Uniform1i(gl.GetUniformLocation(ui_state.quad_shader_program, "audio_frequency_spectrum"), 1)
+	gl.Uniform1i(gl.GetUniformLocation(ui_state.quad_shader_program, "blurred_ui"), 2)
 	gl.Uniform1i(gl.GetUniformLocation(ui_state.quad_shader_program, "audio_frequency_eq_response"), 3)
 
-    setup_for_quads(&ui_state.quad_shader_program)
-    println("Succesfully reloaded shaders!")
+	gl_setup_for_quads(&ui_state.quad_shader_program)
+	println("Succesfully reloaded shaders!")
 }
 
 set_shader_bool :: proc(shader: u32, name: cstring, value: bool) {

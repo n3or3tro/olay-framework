@@ -1,12 +1,12 @@
 package olay
 import "base:intrinsics"
-import "core:time"
+import "core:mem"
+import vmem "core:mem/virtual"
+import "core:path/filepath"
 import "core:strconv"
 import str "core:strings"
-import "core:path/filepath"
-import vmem "core:mem/virtual"
-import "core:mem"
 import win "core:sys/windows"
+import "core:time"
 import sdl "vendor:sdl2"
 
 
@@ -17,8 +17,8 @@ map_range :: proc(in_min, in_max, out_min, out_max, value: $T) -> T where intrin
 
 get_drag_delta :: proc() -> [2]int {
 	return {
-		app.mouse_last_frame.pos.x - app.mouse.pos.x,
-		app.mouse_last_frame.pos.y - app.mouse.pos.y,
+		ui_state.mouse_last_frame.pos.x - ui_state.mouse.pos.x,
+		ui_state.mouse_last_frame.pos.y - ui_state.mouse.pos.y,
 	}
 }
 
@@ -44,7 +44,7 @@ box_width :: proc(box: Box) -> u32 {
 	return u32(width)
 }
 
-box_data_as_string :: proc(box_data: Box_Data, allocator := context.allocator) -> string { 
+box_data_as_string :: proc(box_data: Box_Data, allocator := context.allocator) -> string {
 	data_as_string: string
 	switch data in box_data {
 	case ^string:
@@ -52,18 +52,18 @@ box_data_as_string :: proc(box_data: Box_Data, allocator := context.allocator) -
 		data_as_string = str.clone(data^, allocator)
 	case int:
 		// Would not work properly for giant numbers.
-		buf := make([]byte, 32, allocator)
+		buf           := make([]byte, 32, allocator)
 		data_as_string = strconv.itoa(buf[:], data)
 	case f64:
 		// Would not work properly for giant numbers.
-		buf := make([]byte, 32, allocator)
+		buf           := make([]byte, 32, allocator)
 		data_as_string = strconv.write_float(buf[:], data, 'f', 2, 64)
 	}
 	return data_as_string
 }
 
 // Helper to get point to the last element at the end of a dynamic array / slice.
-tail :: proc(list: []$T) -> ^T{ 
+tail :: proc(list: []$T) -> ^T {
 	if len(list) > 0 {
 		return &list[len(list) - 1]
 	} else {
@@ -72,25 +72,22 @@ tail :: proc(list: []$T) -> ^T{
 }
 
 box_center :: proc(box: Box) -> [2]f32 {
-    return {
-        (f32(box.top_left.x) + f32(box.bottom_right.x)) / 2,
-        (f32(box.top_left.y) + f32(box.bottom_right.y)) / 2
-	};
+	return {(f32(box.top_left.x) + f32(box.bottom_right.x)) / 2, (f32(box.top_left.y) + f32(box.bottom_right.y)) / 2}
 }
 
-box_get_padding_x_tot :: proc(box: Box) -> int { 
+box_get_padding_x_tot :: proc(box: Box) -> int {
 	return box.config.padding.left + box.config.padding.right
 }
 
-box_get_padding_y_tot :: proc(box: Box) -> int { 
+box_get_padding_y_tot :: proc(box: Box) -> int {
 	return box.config.padding.top + box.config.padding.bottom
 }
 
-box_get_margin_x_tot :: proc(box: Box) -> int { 
+box_get_margin_x_tot :: proc(box: Box) -> int {
 	return box.config.margin.left + box.config.margin.right
 }
 
-box_get_margin_y_tot :: proc(box: Box) -> int { 
+box_get_margin_y_tot :: proc(box: Box) -> int {
 	return box.config.margin.top + box.config.margin.bottom
 }
 
@@ -100,7 +97,7 @@ panicf :: proc(fmt_string: string, args: ..any, newline := false) -> ! {
 }
 
 index_of :: proc(list: []$T, item: ^T) -> (index: int, found: bool) {
-	for &el, i in list { 
+	for &el, i in list {
 		if &el == item {
 			return i, true
 		}
@@ -115,19 +112,19 @@ index_of :: proc(list: []$T, item: ^T) -> (index: int, found: bool) {
 is_audio_file_via_path :: proc(path: string) -> bool {
 	file_extension := filepath.ext(path)
 	switch file_extension {
-		case ".wav", ".mp3", ".flac":
-			return true
-		case:
-			return false
+	case ".wav", ".mp3", ".flac":
+		return true
+	case:
+		return false
 	}
 }
 
-arena_allocator_new :: proc(name := "") -> (^vmem.Arena, mem.Allocator) { 
-	when MEM_PROFILE { 
+arena_allocator_new :: proc(name := "") -> (^vmem.Arena, mem.Allocator) {
+	when MEM_PROFILE {
 		// Need to explicityly use the original heap allocator otherwise we allocate
 		// this arena from the tracking allocator and... problems.
 		arena := new(vmem.Arena, app.memory_profiler.og_heap_allocator)
-		err := vmem.arena_init_growing(arena)
+		err   := vmem.arena_init_growing(arena)
 		if err != nil do panicf("{}", err)
 		tracker := new(mem.Tracking_Allocator, app.memory_profiler.og_heap_allocator)
 		mem.tracking_allocator_init(tracker, vmem.arena_allocator(arena), app.memory_profiler.og_heap_allocator)
@@ -138,7 +135,7 @@ arena_allocator_new :: proc(name := "") -> (^vmem.Arena, mem.Allocator) {
 		return arena, mem.tracking_allocator(tracker)
 	} else {
 		arena := new(vmem.Arena)
-		err := vmem.arena_init_growing(arena)
+		err   := vmem.arena_init_growing(arena)
 		if err != nil do panicf("{}", err)
 		return arena, vmem.arena_allocator(arena)
 	}
@@ -153,7 +150,7 @@ arena_allocator_destroy :: proc(arena: ^vmem.Arena, allocator: mem.Allocator, na
 			append(&app.memory_profiler.allocations[name], val)
 		}
 		mem.tracking_allocator_destroy(tracking_allocator) // frees internal allocation_map, bad_free_array
-		tracking_allocator.current_memory_allocated = 0   // arena gone, nothing is live
+		tracking_allocator.current_memory_allocated = 0 // arena gone, nothing is live
 		// Do NOT free the struct — the pointer lives in tracking_allocators map
 	}
 	vmem.arena_destroy(arena)
@@ -166,7 +163,7 @@ arena_allocator_destroy :: proc(arena: ^vmem.Arena, allocator: mem.Allocator, na
 
 boxes_children_tot_height :: proc(box: Box) -> int {
 	tot := 0
-	switch box.child_layout.direction { 
+	switch box.child_layout.direction {
 	case .Vertical:
 		for child in box.children {
 			tot += child.height
@@ -181,7 +178,7 @@ boxes_children_tot_height :: proc(box: Box) -> int {
 
 boxes_children_tot_width :: proc(box: Box) -> int {
 	tot := 0
-	switch box.child_layout.direction { 
+	switch box.child_layout.direction {
 	case .Horizontal:
 		for child in box.children {
 			tot += child.width
@@ -194,21 +191,15 @@ boxes_children_tot_width :: proc(box: Box) -> int {
 	return tot
 }
 
-vec2_f32 :: proc(d: [2]$T) -> [2]f32 
-where intrinsics.type_is_numeric(T) 
-{
+vec2_f32 :: proc(d: [2]$T) -> [2]f32 where intrinsics.type_is_numeric(T) {
 	return {f32(d[0]), f32(d[1])}
 }
 
-vec3_f32 :: proc(d: [3]$T) -> [3]f32 
-where intrinsics.type_is_numeric(T) 
-{
+vec3_f32 :: proc(d: [3]$T) -> [3]f32 where intrinsics.type_is_numeric(T) {
 	return {f32(d[0]), f32(d[1]), f32(d[2])}
 }
 
-vec4_f32 :: proc(d: [4]$T) -> [4]f32 
-where intrinsics.type_is_numeric(T) 
-{
+vec4_f32 :: proc(d: [4]$T) -> [4]f32 where intrinsics.type_is_numeric(T) {
 	return {f32(d[0]), f32(d[1]), f32(d[2]), f32(d[3])}
 }
 
@@ -220,30 +211,27 @@ accurate_sleep :: proc(duration: time.Duration) {
 		due := win.LARGE_INTEGER(-i64(duration) / 100)
 		win.SetWaitableTimerEx(handle, &due, 0, nil, nil, nil, 0)
 		win.WaitForSingleObject(handle, win.INFINITE)
-	} 
-	else when ODIN_OS == .Linux { 
+	} else when ODIN_OS == .Linux {
 		time.accurate_sleep(duration)
-	}
-	else when ODIN_OS == .Darwin {
+	} else when ODIN_OS == .Darwin {
 		time.accurate_sleep(duration)
 	} else {
 		panicf("Don't know how to accurately sleep on {}", ODIN_OS)
 	}
 }
 
-in_range :: proc(num, start, end: $T) -> bool
-where intrinsics.type_is_numeric(T) { 
+in_range :: proc(num, start, end: $T) -> bool where intrinsics.type_is_numeric(T) {
 	return num >= start && num <= end
 }
 
 is_ancestor :: proc(box, other: ^Box) -> bool {
 	if other == nil do return false
-    current := other.parent
-    for current != nil {
-        if current == box do return true
-        current = current.parent
-    }
-    return false
+	current := other.parent
+	for current != nil {
+		if current == box do return true
+		current = current.parent
+	}
+	return false
 }
 
 has_border :: proc(border: Box_Border) -> bool {
@@ -251,20 +239,20 @@ has_border :: proc(border: Box_Border) -> bool {
 }
 
 // Make sure you call reset_cursor() when you're done.
-set_cursor :: proc(which: sdl.SystemCursor) { 
+set_cursor :: proc(which: sdl.SystemCursor) {
 	cursor := sdl.CreateSystemCursor(which)
 	sdl.SetCursor(cursor)
 }
 
 // Should only be called *after* set_cursor().
-reset_cursor :: proc() { 
+reset_cursor :: proc() {
 	sdl.FreeCursor(sdl.GetCursor())
 	cursor := sdl.CreateSystemCursor(.ARROW)
 	sdl.SetCursor(cursor)
 }
 
-push_wakeup_event :: proc() { 
-	e: sdl.Event 
+push_wakeup_event :: proc() {
+	e: sdl.Event
 	e.type = .USEREVENT
 	sdl.PushEvent(&e)
 }

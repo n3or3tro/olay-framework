@@ -1,4 +1,3 @@
-#+build windows
 package olay
 
 import "base:runtime"
@@ -24,14 +23,21 @@ setup_custom_frame :: proc() {
 	// Add thick frame + caption styles so Windows treats this as a resizable, framed window.
 	// SDL without BORDERLESS already sets WS_OVERLAPPEDWINDOW, but be explicit.
 	style := windows.GetWindowLongPtrW(app_hwnd, windows.GWL_STYLE)
-	style |= cast(windows.LONG_PTR)(windows.WS_THICKFRAME | windows.WS_CAPTION | windows.WS_SYSMENU | windows.WS_MINIMIZEBOX | windows.WS_MAXIMIZEBOX)
+	style |= cast(windows.LONG_PTR)(windows.WS_THICKFRAME |
+		windows.WS_CAPTION |
+		windows.WS_SYSMENU |
+		windows.WS_MINIMIZEBOX |
+		windows.WS_MAXIMIZEBOX)
 	windows.SetWindowLongPtrW(app_hwnd, windows.GWL_STYLE, style)
 
 	// Subclass: replace SDL's WndProc with ours, saving the original.
-	original_wndproc = transmute(windows.WNDPROC)cast(rawptr)cast(uintptr)windows.GetWindowLongPtrW(app_hwnd, windows.GWLP_WNDPROC)
+	original_wndproc = transmute(windows.WNDPROC)cast(rawptr)cast(uintptr)windows.GetWindowLongPtrW(
+		app_hwnd,
+		windows.GWLP_WNDPROC,
+	)
 
 	// Persist these in the App struct so they survive DLL hot reloads.
-	app.win32_hwnd = app_hwnd
+	app.win32_hwnd             = app_hwnd
 	app.win32_original_wndproc = original_wndproc
 
 	windows.SetWindowLongPtrW(
@@ -46,8 +52,17 @@ setup_custom_frame :: proc() {
 
 	// Force a WM_NCCALCSIZE so the new frame metrics take effect immediately.
 	windows.SetWindowPos(
-		app_hwnd, nil, 0, 0, 0, 0,
-		windows.SWP_FRAMECHANGED | windows.SWP_NOMOVE | windows.SWP_NOSIZE | windows.SWP_NOZORDER | windows.SWP_NOOWNERZORDER,
+		app_hwnd,
+		nil,
+		0,
+		0,
+		0,
+		0,
+		windows.SWP_FRAMECHANGED |
+		windows.SWP_NOMOVE |
+		windows.SWP_NOSIZE |
+		windows.SWP_NOZORDER |
+		windows.SWP_NOOWNERZORDER,
 	)
 
 	// Capture the Odin context so we can restore it inside the WndProc (which uses
@@ -60,7 +75,7 @@ setup_custom_frame :: proc() {
 // because the current WndProc IS our old (now invalid) custom_wndproc.
 // Restore the globals from the App struct (which lives on the heap and survives reload).
 resubclass_wndproc :: proc() {
-	app_hwnd = app.win32_hwnd
+	app_hwnd         = app.win32_hwnd
 	original_wndproc = app.win32_original_wndproc
 	windows.SetWindowLongPtrW(
 		app_hwnd,
@@ -78,7 +93,12 @@ begin_native_window_drag :: proc() {
 	windows.SendMessageW(app_hwnd, windows.WM_SYSCOMMAND, windows.SC_MOVE | 0x02, 0)
 }
 
-custom_wndproc :: proc "system" (hwnd: windows.HWND, msg: windows.UINT, wparam: windows.WPARAM, lparam: windows.LPARAM) -> windows.LRESULT {
+custom_wndproc :: proc "system" (
+	hwnd: windows.HWND,
+	msg: windows.UINT,
+	wparam: windows.WPARAM,
+	lparam: windows.LPARAM,
+) -> windows.LRESULT {
 
 	switch msg {
 
@@ -88,10 +108,10 @@ custom_wndproc :: proc "system" (hwnd: windows.HWND, msg: windows.UINT, wparam: 
 		// When maximized we must deflate by the frame thickness to not cover the taskbar.
 		if wparam == 1 {
 			if bool(windows.IsZoomed(hwnd)) {
-				params := cast(^windows.NCCALCSIZE_PARAMS)cast(rawptr)cast(uintptr)lparam
+				params   := cast(^windows.NCCALCSIZE_PARAMS)cast(rawptr)cast(uintptr)lparam
 				mi: windows.MONITORINFO
 				mi.cbSize = size_of(windows.MONITORINFO)
-				monitor := windows.MonitorFromWindow(hwnd, .MONITOR_DEFAULTTONEAREST)
+				monitor  := windows.MonitorFromWindow(hwnd, .MONITOR_DEFAULTTONEAREST)
 				windows.GetMonitorInfoW(monitor, &mi)
 				// Set client rect to the monitor's work area (excludes taskbar).
 				params.rgrc[0] = mi.rcWork
@@ -109,22 +129,22 @@ custom_wndproc :: proc "system" (hwnd: windows.HWND, msg: windows.UINT, wparam: 
 		windows.GetClientRect(hwnd, &rc)
 
 		border := i32(RESIZE_BORDER)
-		x := cursor_pos.x
-		y := cursor_pos.y
+		x      := cursor_pos.x
+		y      := cursor_pos.y
 
 		top    := y < border
 		bottom := y >= rc.bottom - border
 		left   := x < border
 		right  := x >= rc.right - border
 
-		if top && left     do return windows.HTTOPLEFT
-		if top && right    do return windows.HTTOPRIGHT
-		if bottom && left  do return windows.HTBOTTOMLEFT
+		if top && left do return windows.HTTOPLEFT
+		if top && right do return windows.HTTOPRIGHT
+		if bottom && left do return windows.HTBOTTOMLEFT
 		if bottom && right do return windows.HTBOTTOMRIGHT
-		if top             do return windows.HTTOP
-		if bottom          do return windows.HTBOTTOM
-		if left            do return windows.HTLEFT
-		if right           do return windows.HTRIGHT
+		if top do return windows.HTTOP
+		if bottom do return windows.HTBOTTOM
+		if left do return windows.HTLEFT
+		if right do return windows.HTRIGHT
 
 		// Everything else (including topbar) returns HTCLIENT so SDL receives mouse events
 		// normally. Topbar dragging is triggered from app code via begin_native_window_drag().
@@ -143,13 +163,13 @@ custom_wndproc :: proc "system" (hwnd: windows.HWND, msg: windows.UINT, wparam: 
 
 	case windows.WM_ENTERSIZEMOVE:
 		in_size_move = true
-		is_resizing = false
+		is_resizing  = false
 		windows.SetTimer(hwnd, RESIZE_TIMER_ID, 16, nil)
 		return 0
 
 	case windows.WM_EXITSIZEMOVE:
 		in_size_move = false
-		is_resizing = false
+		is_resizing  = false
 		windows.KillTimer(hwnd, RESIZE_TIMER_ID)
 		return 0
 

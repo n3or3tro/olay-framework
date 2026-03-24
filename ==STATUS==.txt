@@ -1,0 +1,14 @@
+Currently working on refactoring out the UI from the application layer. 
+
+This entails removing all mentions of the app layer from the UI. The app layer should pass in 
+whatever relevant system stuff the UI needs to use, to the UI. The UI should never call out to 
+the application since the UI is designed to not know what application / platform it is embedded in.
+
+Also working on implementing a win32 platform layer for windowing / input / etc. 
+At first this will re-use the opengl renderer we already have. But, once that's working
+we will immediately move to implementing a d3d11 layer because I'm pretty sure d3d11 has
+better debugging tools. 
+
+However, this will mean that I need to maintain 3 seperate rendering backends which 
+for now isn't bad as the actual GPU stuff isn't that nasty as far as GPU stuff goes. 
+Since it's relatively simple, LLMs can probably help ease the transition.
