@@ -1,54 +1,57 @@
 package olay
 import "core:fmt"
 import "core:mem"
-import "vendor:kb_text_shape"
+import "core:os"
+import "core:sys/windows"
 import "core:time"
 import gl "vendor:OpenGL"
+import "vendor:kb_text_shape"
+import lua "vendor:lua/5.1"
 import sdl "vendor:sdl2"
-import "core:sys/windows"
-import "core:os"
 
-Mode :: enum { 
+Mode :: enum {
 	Release,
-	Hot_Reload
+	Hot_Reload,
 }
 
 PERF_PROFILE :: #config(perf_profile, false)
-MEM_PROFILE  :: #config(mem_profile, false)
+MEM_PROFILE :: #config(mem_profile, false)
 
-print 	  :: fmt.print
-println   :: fmt.println
-printf 	  :: fmt.printf
-printfln  :: fmt.printfln
-aprintf	  :: fmt.aprintf
-tprintf	  :: fmt.tprintf
+print :: fmt.print
+println :: fmt.println
+printf :: fmt.printf
+printfln :: fmt.printfln
+aprintf :: fmt.aprintf
+tprintf :: fmt.tprintf
 tprintfln :: fmt.aprintfln
 
-Memory_Profiler :: struct { 
+Memory_Profiler :: struct {
 	tracking_allocators: map[string]^mem.Tracking_Allocator,
-	og_heap_allocator: mem.Allocator,
-	allocations: map[string][dynamic]mem.Tracking_Allocator_Entry
+	og_heap_allocator:   mem.Allocator,
+	allocations:         map[string][dynamic]mem.Tracking_Allocator_Entry,
 }
 
 App :: struct {
-	mode: 					  Mode,
-	char_queue:        		  [128]sdl.Keycode,
-	keys_held:         		  [sdl.NUM_SCANCODES]bool,
-	mouse:             		  Mouse_State,
-	mouse_last_frame:  		  Mouse_State,
-	ui_state:          		  ^UI_State,
-	window:            		  ^sdl.Window,
-	maximized:		 		  bool,
-	curr_chars_stored: 		  u32,
-	wx:                		  int,
-	wy:                		  int,
-	running:           		  bool,
-	windows_com_handle:		  windows.HRESULT,
-	win32_hwnd:				  windows.HWND,
-	win32_original_wndproc:	  windows.WNDPROC,
-	memory_profiler: 		   Memory_Profiler,
-	selected_track: 		   int,	
-	last_undo_commit_frame:    u64,
+	mode:                   Mode,
+	char_queue:             [128]sdl.Keycode,
+	keys_held:              [sdl.NUM_SCANCODES]bool,
+	mouse:                  Mouse_State,
+	mouse_last_frame:       Mouse_State,
+	ui_state:               ^UI_State,
+	window:                 ^sdl.Window,
+	maximized:              bool,
+	curr_chars_stored:      u32,
+	wx:                     int,
+	wy:                     int,
+	running:                bool,
+	windows_com_handle:     windows.HRESULT,
+	win32_hwnd:             windows.HWND,
+	win32_original_wndproc: windows.WNDPROC,
+	memory_profiler:        Memory_Profiler,
+	selected_track:         int,
+	last_undo_commit_frame: u64,
+	lua:                    ^lua.State,
+	lua_ui_chunk:           i32,
 }
 
 Window :: sdl.Window
@@ -68,7 +71,7 @@ app_update :: proc() -> (all_good: bool) {
 	if ui_state.frames_since_sleep >= 5 do ui_state.frames_since_sleep = 0
 	ui_state.event_wait_timeout = 1_000_000_000
 	dt_ms := (f64(time.now()._nsec) / 1_000_000) - ui_state.prev_frame_start_ms
-	dt_ms = min(dt_ms, 100)
+	dt_ms  = min(dt_ms, 100)
 	ui_state.prev_frame_start_ms = f64(time.now()._nsec) / 1_000_000
 	animation_update_all(dt_ms / 1_000)
 	start := time.now()._nsec
@@ -82,12 +85,14 @@ app_update :: proc() -> (all_good: bool) {
 	// Sleep until an event arrives and unblocks us.
 	// Skip the blocking wait when inside the Windows modal resize loop -- the WM_TIMER
 	// is driving our frames and we must not block here or the resize stalls.
-	if !is_resizing && ((ui_state.frames_since_sleep == 0 && sdl.WaitEventTimeout(&event, i32(ui_state.event_wait_timeout * 1_000))) ||
-	ui_state.frame_num < 5)
-	{
-		exit = handle_input(event)
-		if exit do return false
-	}
+
+	/*Removed waiting behaviour during development since it pauses a lua hot reload.*/
+	// if !is_resizing &&
+	// ((ui_state.frames_since_sleep == 0 && sdl.WaitEventTimeout(&event, i32(ui_state.event_wait_timeout * 1_000))) || ui_state.frame_num < 5)
+	// {
+	// 	exit = handle_input(event)
+	// 	if exit do return false
+	// }
 
 	// Poll for any other events that arrived with the unblocking event.
 	for sdl.PollEvent(&event) {
@@ -101,27 +106,27 @@ app_update :: proc() -> (all_good: bool) {
 	// Handle keyboard shortcuts after UI so text fields consume their chars first.
 	handle_keyboard_shortcuts()
 
-	render_start := time.now()._nsec
+	render_start     := time.now()._nsec
 	rect_render_data := make([dynamic]Rect_Render_Data, context.temp_allocator)
 	collect_render_data_from_ui_tree(&rect_render_data)
 	if ui_state.frame_num > 0 {
-		render_ui_background_to_fbo(rect_render_data)
-		render_blur_pass()
-		render_ui(rect_render_data)
+		gl_render_ui_background_to_fbo(rect_render_data)
+		gl_render_blur_pass()
+		gl_render_ui(rect_render_data)
 	}
 	render_end := time.now()._nsec
 	// printfln("rendering the UI took: {}", f64(render_end - render_start) / 1_000_000)
 
 	sdl.GL_SwapWindow(app.window)
 
-	when MEM_PROFILE { 
+	when MEM_PROFILE {
 		total_bytes_allocated := 0
-		for name, allocator in app.memory_profiler.tracking_allocators { 
+		for name, allocator in app.memory_profiler.tracking_allocators {
 			printfln("{} allocated %.2f MB", name, f64(allocator.current_memory_allocated) / 1_000_000.0)
 			total_bytes_allocated += int(allocator.current_memory_allocated)
 		}
 
-		for key, alloc_list in app.memory_profiler.allocations { 
+		for key, alloc_list in app.memory_profiler.allocations {
 			sub_total := 0
 			for alloc in alloc_list {
 				sub_total += alloc.size
@@ -130,7 +135,7 @@ app_update :: proc() -> (all_good: bool) {
 			total_bytes_allocated += sub_total
 		}
 		println("total memory allocated this frame: {}\n ", f64(total_bytes_allocated) / 1_000_000.0)
-	} 
+	}
 
 	// We do this here instead of inside 'handle_input' because handle_input runs at the start of the frame,
 	// and this data must live till the end of the frame.
@@ -140,29 +145,29 @@ app_update :: proc() -> (all_good: bool) {
 		// and then never again...
 		clear(&ui_state.dropped_data)
 	}
-	
+
 	reset_ui_state()
 	free_all(context.temp_allocator)
 	app.ui_state.frame_num += 1
-	app.curr_chars_stored = {}
+	app.curr_chars_stored  = {}
 	// Probably need to add more stuff to clear here.
 	if ui_state.changed_ui_screen {
-		ui_state.last_hot_box = nil
-		ui_state.last_active_box = nil
+		ui_state.last_hot_box     = nil
+		ui_state.last_active_box  = nil
 		ui_state.last_clicked_box = nil
 		ui_state.right_clicked_on = nil
-		ui_state.dragged_box = nil
-		ui_state.mouse_down_on = nil
-		// This doesn't reclaim the memory the map used to store the values. 
+		ui_state.dragged_box      = nil
+		ui_state.mouse_down_on    = nil
+		// This doesn't reclaim the memory the map used to store the values.
 		// Just resets the map's metadata so that memory can be overwritten.
 		clear(&ui_state.frame_signals)
 	}
 
 	// Calculate how long this frame took and sleep until it's time for the next frame.
-	// max_frame_time_ns: f64 = 1_000_000 * 200 
-	max_frame_time_ns: f64 = 1_000_000 * 8.3333 
+	// max_frame_time_ns: f64 = 1_000_000 * 200
+	max_frame_time_ns: f64 = 1_000_000 * 8.3333
 	// max_frame_time_ns: f64 = 1_000_000 * 16.6666
-	frame_time := f64(time.now()._nsec - start)
+	frame_time   := f64(time.now()._nsec - start)
 	time_to_wait := time.Duration(max_frame_time_ns - frame_time)
 
 	end := time.now()._nsec
@@ -179,7 +184,10 @@ app_update :: proc() -> (all_good: bool) {
 @(export)
 app_init :: proc(first_run := true) -> ^App {
 	app.ui_state = new(UI_State)
-	ui_state = app.ui_state
+	app.lua      = lua.L_newstate()
+	lua.L_openlibs(app.lua)
+	lua_register_all(app.lua)
+	ui_state               = app.ui_state
 	ui_state.parents_stack = make([dynamic]^Box)
 
 	init_ui_state()
@@ -266,7 +274,7 @@ app_memory :: proc() -> rawptr {
 }
 
 @(export)
-app_store_tracking_allocator :: proc(name: string, allocator: ^mem.Tracking_Allocator) { 
+app_store_tracking_allocator :: proc(name: string, allocator: ^mem.Tracking_Allocator) {
 	app.memory_profiler.tracking_allocators[name] = allocator
 }
 
@@ -301,22 +309,42 @@ app_wants_restart :: proc() -> bool {
 
 @(export)
 app_hot_reload :: proc(mem: rawptr) {
-	app = (^App)(mem)
+	app      = (^App)(mem)
 	ui_state = app.ui_state
 	font_init(&ui_state.font_state)
 	icons_init(&ui_state.icon_state)
+	lua_register_all(app.lua)
 	when ODIN_OS == .Windows {
 		resubclass_wndproc()
 	}
 }
 
 @(export)
-app_reload_colors :: proc(mem: rawptr, color_file_path: string) { 
+app_reload_colors :: proc(mem: rawptr, color_file_path: string) {
 	app = (^App)(mem)
 	delete(app.ui_state.dark_theme)
 	data, err := os.read_entire_file_from_path(color_file_path, context.temp_allocator)
 	assert(err == os.General_Error.None)
 	app.ui_state.dark_theme = parse_json_token_color_mapping(data)
+}
+
+@(export)
+app_reload_lua :: proc(mem: rawptr, lua_file_path: string) {
+	app   = (^App)(mem)
+	L    := app.lua
+	path := tprintf("{}\x00", lua_file_path)
+	if lua.L_loadfile(L, cstring(raw_data(path))) != .OK {
+		err := string(lua.tostring(L, -1))
+		printfln("Lua load error: {}", err)
+		lua.pop(L, 1)
+		return
+	}
+	// Release old chunk if one exists.
+	if app.lua_ui_chunk != lua.NOREF {
+		lua.L_unref(L, lua.REGISTRYINDEX, app.lua_ui_chunk)
+	}
+	app.lua_ui_chunk = lua.L_ref(L, lua.REGISTRYINDEX)
+	printfln("Lua reloaded: {}", lua_file_path)
 }
 
 @(export)
@@ -326,10 +354,10 @@ app_delete :: proc() {
 
 @(export)
 app_reset_state :: proc() {
-	app.char_queue 		  = {}
+	app.char_queue        = {}
 	app.curr_chars_stored = 0
-	app.keys_held  		  = {}
-	app.mouse 	   		  = {}
+	app.keys_held         = {}
+	app.mouse             = {}
 	app.mouse_last_frame  = {}
 
 	free(app.ui_state.quad_vbuffer)
@@ -364,7 +392,7 @@ app_shutdown :: proc() {
 	delete_dynamic_array(app.ui_state.color_stack)
 	for key, val in app.ui_state.box_cache {
 		delete(key)
-		// if str, ok := val.data.(^string); ok { 
+		// if str, ok := val.data.(^string); ok {
 		// 	delete(str^)
 		// }
 		delete(val.children)
@@ -389,7 +417,7 @@ app_shutdown :: proc() {
 
 // This must be called after we create the UI and give widgets the chance to consume key events.
 handle_keyboard_shortcuts :: proc() {
-	n_handled :u32= 0
+	n_handled: u32 = 0
 	for i in 0 ..< app.curr_chars_stored {
 	}
 	app.curr_chars_stored -= n_handled

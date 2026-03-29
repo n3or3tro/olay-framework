@@ -24,7 +24,8 @@ DLL_PATH :: "build/app." + dynlib.LIBRARY_FILE_EXTENSION
 // } else {
 // 	COLOR_FILE_PATH :: "util/dark-theme.json"
 // }
-COLOR_FILE_PATH :: "util/dark-theme.json"
+COLOR_FILE_PATH  :: "util/dark-theme.json"
+LUA_UI_FILE_PATH :: "ui/main.lua"
 
 print :: fmt.print
 println :: fmt.println
@@ -55,6 +56,8 @@ App_API :: struct {
 	shutdown:          		 proc(),
 	reload_colors:     		 proc(mem: rawptr, color_file_path: string),
 	last_edit_colors:  		 time.Time,
+	reload_lua:              proc(mem: rawptr, lua_file_path: string),
+	last_edit_lua:           time.Time,
 	reload_shaders:			 proc(),
 	last_edit_shaders: 		 time.Time,
 	last_edit_dll:     		 time.Time,
@@ -173,6 +176,7 @@ run_hot_reload_mode :: proc() {
 	api.create_gl_context()
 	api.load_gl_procs()
 	api.init()
+	api.reload_lua(api.memory(), LUA_UI_FILE_PATH)
 	// api.hot_reload(api.memory())
 	for {
 		if api.wants_restart() {
@@ -194,12 +198,18 @@ run_hot_reload_mode :: proc() {
 			t_frag, _ := os.last_write_time_by_name(PIXEL_SHADER_PATH)
 			api.last_edit_shaders._nsec = max(t_vert._nsec, t_frag._nsec)	
 		}
-		if should_reload_colors() { 
+		if should_reload_colors() {
 			time.sleep(time.Millisecond * 100)
 			api.reload_colors(api.memory(), COLOR_FILE_PATH)
 			t, err := os.last_write_time_by_name(COLOR_FILE_PATH)
 			if err != io.Error.None  do panic(tprintf("Failed to get last write time of {}", err))
 			api.last_edit_colors = t
+		}
+		if should_reload_lua() {
+			api.reload_lua(api.memory(), LUA_UI_FILE_PATH)
+			t, err := os.last_write_time_by_name(LUA_UI_FILE_PATH)
+			if err != io.Error.None do panic(tprintf("Failed to get last write time of {}", err))
+			api.last_edit_lua = t
 		}
 		if !api.update() do break
 	}
@@ -254,6 +264,12 @@ should_reload_dll :: proc() -> bool {
 	time, err := os.last_write_time_by_name(DLL_PATH)
 	if err != io.Error.None do panic(tprintfln("{}", err))
 	return time._nsec > api.last_edit_dll._nsec
+}
+
+should_reload_lua :: proc() -> bool {
+	t, err := os.last_write_time_by_name(LUA_UI_FILE_PATH)
+	if err != io.Error.None do return false
+	return t._nsec > api.last_edit_lua._nsec
 }
 
 should_reload_shaders :: proc() -> bool { 
