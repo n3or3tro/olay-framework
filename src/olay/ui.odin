@@ -292,6 +292,18 @@ init_ui_state :: proc() -> ^UI_State {
 	return ui_state
 }
 
+example_ui :: proc() {
+	text_button(
+		"hello",
+		{
+			size       = Size_Fit_Text,
+			text_color = .Red_600,
+			padding    = padding(10),
+			color      = .Slate_800,
+		},
+	)
+}
+
 create_ui :: proc() -> ^Box {
 	// Collect frame signals for this frame based on what the tree just looked like at the end of the prev frame.
 	if ui_state.frame_num > 1 {
@@ -315,7 +327,7 @@ create_ui :: proc() -> ^Box {
 		{direction = .Vertical},
 		// This is basically the only mandatory ID in the entire UI. DON'T REMOVE IT!!
 		id = "root",
-		box_flags = {.Draw, .Glow, .Clickable},
+		box_flags = {.Draw, .Clickable},
 	).box
 	ui_state.root = root
 
@@ -327,14 +339,14 @@ create_ui :: proc() -> ^Box {
 			lua.pop(app.lua, 1)
 			// Close any containers that Lua opened but didn't close due to the error.
 			for len(ui_state.parents_stack) > stack_depth_before {
-				box := ui_state.parents_stack[len(ui_state.parents_stack) - 1]
+				box        := ui_state.parents_stack[len(ui_state.parents_stack) - 1]
 				signals: Box_Signals
 				signals.box = box
 				box_regular_close_children(signals)
 			}
 		}
 	}
-
+	// example_ui()
 	if ui_state.dragged_box != nil {
 		dragged_box := ui_state.dragged_box.(^Box)
 		if .Drag_Drop_Source in dragged_box.flags {

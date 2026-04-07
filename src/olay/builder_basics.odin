@@ -480,9 +480,8 @@ multi_button_set :: proc(
 // At the moment we assume all dragging windows should be draggable anywhere in the root container,
 // we could most likely restrict this to have nested floating windows. i.e. you can't drag some floating
 // window outside of it's parent's bounds.
-@(deferred_out = box_floating_close_children)
-draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := "", extra_flags := Box_Flags{}) ->
-(container_signals: Box_Signals, close_btn_signals: Box_Signals, maximise_button_signals: Box_Signals, maximised: bool) 
+draggable_window_begin :: proc(title: string, child_layout: Box_Child_Layout, id := "", extra_flags := Box_Flags{}) ->
+(container_signals: Box_Signals, close_btn_signals: Box_Signals, maximise_button_signals: Box_Signals, maximised: bool)
 {
 	container := box_from_cache(
 		{.Drop_Shadow},
@@ -508,7 +507,7 @@ draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := ""
 		}
 		ui_state.draggable_window_offsets[container.id] = data
 	}
-	window_metadata := &ui_state.draggable_window_offsets[container.id] 
+	window_metadata := &ui_state.draggable_window_offsets[container.id]
 	offset_from_root = &window_metadata.offset
 	container.config.floating_offset = offset_from_root^
 
@@ -527,7 +526,7 @@ draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := ""
 			max_size = {50, 50}
 		}
 	)
-	if maximise_button.clicked { 
+	if maximise_button.clicked {
 		window_metadata.maximised = !window_metadata.maximised
 	}
 
@@ -549,7 +548,7 @@ draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := ""
 			max_size = {50, 50}
 		},
 	)
-	if close_button.clicked { 
+	if close_button.clicked {
 		window_metadata.opened = false
 	}
 
@@ -570,6 +569,13 @@ draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := ""
 		window_metadata.dragging = false
 	}
 	return box_signals(container), close_button, maximise_button, window_metadata.maximised
+}
+
+@(deferred_out = box_floating_close_children)
+draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := "", extra_flags := Box_Flags{}) ->
+(container_signals: Box_Signals, close_btn_signals: Box_Signals, maximise_button_signals: Box_Signals, maximised: bool)
+{
+	return draggable_window_begin(title, child_layout, id, extra_flags)
 }
 
 Knob_Type :: enum { 
@@ -816,8 +822,7 @@ VList_Item_Size :: union {
 	f32,
 }
 
-@(deferred_out = virtual_list_end)
-virtual_list :: proc(
+virtual_list_begin :: proc(
 	config: Box_Config,
 	child_layout: Box_Child_Layout,
 	total_items: int,
@@ -916,4 +921,18 @@ virtual_list :: proc(
 		direction             = direction,
 		container_signals     = box_signals(box),
 	}
+}
+
+@(deferred_out = virtual_list_end)
+virtual_list :: proc(
+	config: Box_Config,
+	child_layout: Box_Child_Layout,
+	total_items: int,
+	item_size: VList_Item_Size,
+	id := "",
+	box_flags := Box_Flags{},
+	metadata := Box_Metadata{},
+) -> Virtual_List_State
+{
+	return virtual_list_begin(config, child_layout, total_items, item_size, id, box_flags, metadata)
 }

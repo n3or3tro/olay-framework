@@ -1,4 +1,5 @@
 package olay
+import "base:runtime"
 import "core:fmt"
 import "core:mem"
 import "core:os"
@@ -23,7 +24,8 @@ printf :: fmt.printf
 printfln :: fmt.printfln
 aprintf :: fmt.aprintf
 tprintf :: fmt.tprintf
-tprintfln :: fmt.aprintfln
+tprintfln :: fmt.tprintfln
+tprintln :: fmt.tprintln
 
 Memory_Profiler :: struct {
 	tracking_allocators: map[string]^mem.Tracking_Allocator,
@@ -31,27 +33,30 @@ Memory_Profiler :: struct {
 	allocations:         map[string][dynamic]mem.Tracking_Allocator_Entry,
 }
 
+@(lua_struct)
 App :: struct {
-	mode:                   Mode,
-	char_queue:             [128]sdl.Keycode,
-	keys_held:              [sdl.NUM_SCANCODES]bool,
-	mouse:                  Mouse_State,
-	mouse_last_frame:       Mouse_State,
-	ui_state:               ^UI_State,
-	window:                 ^sdl.Window,
-	maximized:              bool,
-	curr_chars_stored:      u32,
-	wx:                     int,
-	wy:                     int,
-	running:                bool,
-	windows_com_handle:     windows.HRESULT,
-	win32_hwnd:             windows.HWND,
-	win32_original_wndproc: windows.WNDPROC,
-	memory_profiler:        Memory_Profiler,
-	selected_track:         int,
-	last_undo_commit_frame: u64,
-	lua:                    ^lua.State,
-	lua_ui_chunk:           i32,
+	mode:                       Mode,
+	char_queue:                 [128]sdl.Keycode,
+	keys_held:                  [sdl.NUM_SCANCODES]bool,
+	mouse:                      Mouse_State,
+	mouse_last_frame:           Mouse_State,
+	ui_state:                   ^UI_State,
+	window:                     ^sdl.Window,
+	maximized:                  bool,
+	curr_chars_stored:          u32,
+	wx:                         int,
+	wy:                         int,
+	running:                    bool,
+	windows_com_handle:         windows.HRESULT,
+	win32_hwnd:                 windows.HWND,
+	win32_original_wndproc:     windows.WNDPROC,
+	memory_profiler:            Memory_Profiler,
+	selected_track:             int,
+	last_undo_commit_frame:     u64,
+	lua:                        ^lua.State,
+	lua_ui_chunk:               i32,
+	lua_odin_context:           runtime.Context,
+	last_write_time_app_source: i64,
 }
 
 Window :: sdl.Window
@@ -172,7 +177,7 @@ app_update :: proc() -> (all_good: bool) {
 
 	end := time.now()._nsec
 	total_frame_time_ns := f64(end - start)
-	// printfln("app_update() took {} ms", total_frame_time_ns / 1_000_000)
+	printfln("app_update() took {} ms", total_frame_time_ns / 1_000_000)
 
 	// if time_to_wait > 0 {
 	// 	time.accurate_sleep(time_to_wait)
@@ -183,8 +188,9 @@ app_update :: proc() -> (all_good: bool) {
 
 @(export)
 app_init :: proc(first_run := true) -> ^App {
-	app.ui_state = new(UI_State)
-	app.lua      = lua.L_newstate()
+	app.ui_state         = new(UI_State)
+	app.lua_odin_context = context
+	app.lua              = lua.L_newstate()
 	lua.L_openlibs(app.lua)
 	lua_register_all(app.lua)
 	ui_state               = app.ui_state
@@ -326,6 +332,30 @@ app_reload_colors :: proc(mem: rawptr, color_file_path: string) {
 	data, err := os.read_entire_file_from_path(color_file_path, context.temp_allocator)
 	assert(err == os.General_Error.None)
 	app.ui_state.dark_theme = parse_json_token_color_mapping(data)
+}
+
+@(export)
+app_wants_dll_rebuild :: proc() -> bool {
+	pwd, _          := os.get_working_directory(context.temp_allocator)
+	files_info, err := os.read_directory_by_path("./src/olay", 0, context.temp_allocator)
+	assert(err == os.General_Error.None)
+	newest: i64
+	newest_file: string
+	for info in files_info {
+		if info.type == .Directory do continue
+		if info.modification_time._nsec > newest {
+			newest      = info.modification_time._nsec
+			newest_file = info.name
+		}
+	}
+
+	if newest > app.last_write_time_app_source {
+		printfln("{} has changed since we last checked", newest_file)
+		printfln("old mod time was: {} and something new was written at {}", app.last_write_time_app_source, newest)
+		app.last_write_time_app_source = newest
+		return true
+	}
+	return false
 }
 
 @(export)
