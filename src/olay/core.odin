@@ -1,7 +1,7 @@
 package olay
 import "core:flags"
-import "core:math/rand"
 import "core:fmt"
+import "core:math/rand"
 import str "core:strings"
 import "core:time"
 import gl "vendor:OpenGL"
@@ -33,12 +33,12 @@ Color_RGBA :: [4]f32
 
 // All size variants that require a value, have that value as a ratio 0-1 excpet for Absolute_Pixel which is in pixels.
 // Top_* and Bottom_* are ways to easilly pin boxes to various places
-Position_Floating_Type :: enum { 
-	Not_Floating, 
+Position_Floating_Type :: enum {
+	Not_Floating,
 	Relative_Root,
 	Relative_Parent,
 	// Relative to some other box that isn't the parent nor the root.
-	Relative_Other, 
+	Relative_Other,
 	Top_Center,
 	Top_Left,
 	Top_Right,
@@ -48,67 +48,67 @@ Position_Floating_Type :: enum {
 	Center_Center,
 	Center_Left,
 	Center_Right,
-	Absolute_Pixel
+	Absolute_Pixel,
 }
 
-Box_Padding :: struct { 
-	left, top, right, bottom: int
+Box_Padding :: struct {
+	left, top, right, bottom: int,
 }
 
 Box_Border :: struct {
-	left, top, right, bottom: int
+	left, top, right, bottom: int,
 }
 
-Overflow_Mode :: enum { 
-	Visible,  // Content extends beyond bounds.
-    Auto,     // Clip + scrollbar only when content overflows.
-    Scroll,   // Clip + always show scrollbar.
-    Hidden,   // Clip at bounds, no scrolling.
+Overflow_Mode :: enum {
+	Visible, // Content extends beyond bounds.
+	Auto, // Clip + scrollbar only when content overflows.
+	Scroll, // Clip + always show scrollbar.
+	Hidden, // Clip at bounds, no scrolling.
 }
 
 // Style and layout info that has to be known upon Box creation.
 Box_Config :: struct {
 	// All other color info can be determined from the main color token, so this is all you
 	// need to provide.
-	color:  		 	Semantic_Color_Token,
-	text_color:		    Semantic_Color_Token,
-	glow_color: 		Semantic_Color_Token,
-	glow_colors:		[4]Semantic_Color_Token,
-	corner_radius:      int,
-	edge_softness:      int,
-	border:   			Box_Border,
+	color:               Semantic_Color_Token,
+	text_color:          Semantic_Color_Token,
+	glow_color:          Semantic_Color_Token,
+	glow_colors:         [4]Semantic_Color_Token,
+	corner_radius:       int,
+	edge_softness:       int,
+	border:              Box_Border,
 	// Internal padding that will surround child elements.
-	padding: 			Box_Padding,  
+	padding:             Box_Padding,
 	// External space that will put empty space around the outside of this box.
-	margin: 			Box_Padding,  
-	size:      			[2]Box_Size,
-	max_size:           [2]int,
-	min_size:           [2]int,
+	margin:              Box_Padding,
+	size:                [2]Box_Size,
+	max_size:            [2]int,
+	min_size:            [2]int,
 	// Lets you break out of the layout flow and position 'absolutely', relative
 	// to immediate parent.
-	floating_type:  	Position_Floating_Type,
+	floating_type:       Position_Floating_Type,
 	// These are % value of how far to the right and how far down from the top left a child will
 	// be placed if position_absolute, is set.
-	floating_offset: 	[2]f32,
+	floating_offset:     [2]f32,
 	// Sometimes you want to set some box to float relative a box that isn't
 	// it's parent or the root, in that case, you set this pointer = to that box.
 	floating_anchor_box: ^Box,
-	text_justify:		[2]Text_Alignment,
-	z_index:			int,
-	line_start: 		Vec2_f32,
-	line_end: 			Vec2_f32,
-	line_thickness: 	int,
-	overflow_x: 		Overflow_Mode,
-	overflow_y: 		Overflow_Mode,
-	font_size: 			u32,
-	border_color: 		Semantic_Color_Token,
+	text_justify:        [2]Text_Alignment,
+	z_index:             int,
+	line_start:          Vec2_f32,
+	line_end:            Vec2_f32,
+	line_thickness:      int,
+	overflow_x:          Overflow_Mode,
+	overflow_y:          Overflow_Mode,
+	font_size:           u32,
+	border_color:        Semantic_Color_Token,
 }
 
-// This is a seperate enum so we can have a different default alignment for text. 
+// This is a seperate enum so we can have a different default alignment for text.
 // i.e. text is centered by default.
-Text_Alignment :: enum { 
-	Center, 
-	Start, 
+Text_Alignment :: enum {
+	Center,
+	Start,
 	End,
 }
 
@@ -137,10 +137,10 @@ Box_Size_Type :: enum {
 	Fit_Children,
 	Fit_Children_And_Grow,
 	// For things like text_buttons which won't have children
-	Fit_Text, 
-	// Like above, but also allows to grow along axis (useful lists of text where each 
+	Fit_Text,
+	// Like above, but also allows to grow along axis (useful lists of text where each
 	// string might be a different length.
-	Fit_Text_And_Grow, 
+	Fit_Text_And_Grow,
 	Grow,
 	Fixed,
 	Percent, // Percent of parent.
@@ -151,12 +151,12 @@ Box_Size :: struct {
 	amount: f32,
 }
 
-Metadata_Knob :: struct { 
+Metadata_Knob :: struct {
 	min, max, val: f32,
-	logarithmic: bool,
+	logarithmic:   bool,
 }
 
-// Probably a little wasteful to have something like this to just denote that a 
+// Probably a little wasteful to have something like this to just denote that a
 // box is a specific type of widget.
 Box_Metadata :: union {
 	Metadata_Knob,
@@ -169,7 +169,7 @@ Box_Flag :: enum {
 	View_Scroll,
 	Draw,
 	// Whether this box is a line.
-	Line, 
+	Line,
 	Draw_Text,
 	Draw_Icon,
 	Text_Center,
@@ -188,7 +188,7 @@ Box_Flag :: enum {
 	Active_Animation,
 	Draggable,
 	Drag_Drop_Source,
-	Drag_Drop_Sink, 
+	Drag_Drop_Sink,
 	Fixed_Width,
 	Floating_X,
 	No_Offset, //
@@ -204,84 +204,84 @@ Box_Flags :: bit_set[Box_Flag]
 
 Box_Data :: union {
 	// string,
-	^string, 
+	^string,
 	int,
 	f64,
 }
 
 Box :: struct {
-	fresh:  	  bool,
-	id:           string,
-	text: 		  string,
-	icon_rune:    rune, 
+	fresh:             bool,
+	id:                string,
+	text:              string,
+	icon_rune:         rune,
 	// Current thing being hovered over this frame, only 1 can exist at the end of each frame.
-	hot:          bool,
+	hot:               bool,
 	// Current thing being clicked on this frame, only 1 can exist at the end of each frame.
-	active:       bool,
+	active:            bool,
 	// Many UI elements require this idea of being 'selected'. Radio boxes, tracker steps, etc, etc
 	// Many boxes can be selected in any given frame.
-	selected: 	  bool,
+	selected:          bool,
 	// Various boxes have this idea of being disabled
-	disabled: 	  bool,
-	signals:      Box_Signals,
+	disabled:          bool,
+	signals:           Box_Signals,
 	// Feature flags.
-	flags:        Box_Flags,
+	flags:             Box_Flags,
 	// Style and layout config
-	config:       Box_Config,
-	children:     [dynamic]^Box,
-	child_layout: Box_Child_Layout,
-	parent:       ^Box,
+	config:            Box_Config,
+	children:          [dynamic]^Box,
+	child_layout:      Box_Child_Layout,
+	parent:            ^Box,
 	// For boxes that need data associated with them, e.g: edit_text_boxes.
 	// This thing has caused so many fucking problems and needs to be refactored away.
 	// data:         Box_Data,
-	// Temporary field I'm using while debugging tracker step mem corruption issue. 
+	// Temporary field I'm using while debugging tracker step mem corruption issue.
 	// It will act as the backing buffer of the box.data string.
-	data_buffer:  [64]byte, // Delete after, don't use this in production.
-	width:        int,
-	height:       int,
+	data_buffer:       [64]byte, // Delete after, don't use this in production.
+	width:             int,
+	height:            int,
 	// We need to keep track of these for calculations we perform when building the tree,
 	// for example calculating drag deltas (dragging volume handle up a track, track height)
 	// needs to be known.
-	prev_height:  int,
-	prev_width:   int,
-	top_left:     Vec2_int,
-	bottom_right: Vec2_int,
-	// These are basically only used to check if we've invalidated our assumptions for cached 
+	prev_height:       int,
+	prev_width:        int,
+	top_left:          Vec2_int,
+	bottom_right:      Vec2_int,
+	// These are basically only used to check if we've invalidated our assumptions for cached
 	// waveform rendering data, might be better off just having an explicit flag for just that
 	// use case.
 	prev_top_left:     Vec2_int,
 	prev_bottom_right: Vec2_int,
-	z_index:      int,
+	z_index:           int,
 	// next:         ^Box, // Sibling, aka, on the same level of the UI tree. Have the same parent.
-	keep:         bool, // Indicates whether we keep this box around for th next frame.
-	metadata: 	  Box_Metadata,
-	clip_tl: 	  Vec2_int,
-	clip_br: 	  Vec2_int,
-	n_anon_children: int,
+	keep:              bool, // Indicates whether we keep this box around for th next frame.
+	metadata:          Box_Metadata,
+	clip_tl:           Vec2_int,
+	clip_br:           Vec2_int,
+	n_anon_children:   int,
 }
 
 Box_Signals :: struct {
-	clicked:        bool,
-	shift_clicked:  bool,
-	double_clicked: bool,
-	right_clicked:  bool,
-	pressed:        bool,
-	released:       bool,
-	right_pressed:  bool,
-	right_released: bool,
-	dragged_over:   bool,
-	dropped_on: 	bool,
-	hovering:       bool,
-	scrolled_up:    bool,
-	scrolled_down:  bool,
-	scrolled_left:  bool,
-	scrolled_right: bool,
+	clicked:              bool,
+	shift_clicked:        bool,
+	double_clicked:       bool,
+	right_clicked:        bool,
+	pressed:              bool,
+	released:             bool,
+	right_pressed:        bool,
+	right_released:       bool,
+	dragged_over:         bool,
+	dropped_on:           bool,
+	hovering:             bool,
+	scrolled_up:          bool,
+	scrolled_down:        bool,
+	scrolled_left:        bool,
+	scrolled_right:       bool,
 	shift_scrolled_up:    bool,
 	shift_scrolled_down:  bool,
 	shift_scrolled_left:  bool,
 	shift_scrolled_right: bool,
-	changed: 		bool,
-	box:            ^Box,
+	changed:              bool,
+	box:                  ^Box,
 }
 
 Mouse_State :: struct {
@@ -299,28 +299,27 @@ Mouse_State :: struct {
 
 /* ======================= Start Core Box Code ========================= */
 
-@(private="file")
+@(private = "file")
 box_make :: proc(
-flags: Box_Flags,
-config: Box_Config,
-label := "",
-id := "",
-allocator := context.allocator,
-icon_rune := '0',
-) -> ^Box 
-{
+	flags: Box_Flags,
+	config: Box_Config,
+	label := "",
+	id := "",
+	allocator := context.allocator,
+	icon_rune := '0',
+) -> ^Box {
 	// box := new(Box, context.allocator)
 	box := new(Box, allocator)
 
 	persistant_id, err := str.clone(id)
 	assert(err == .None)
-	box.id = persistant_id
-	box.text = label
+	box.id        = persistant_id
+	box.text      = label
 	box.icon_rune = icon_rune
 
-	box.flags = flags
+	box.flags  = flags
 	box.config = config
-	if box.config.font_size == 0 { 
+	if box.config.font_size == 0 {
 		box.config.font_size = 16
 	}
 
@@ -340,8 +339,8 @@ icon_rune := '0',
 		}
 	}
 
-	x_size_type := box.config.size.x.type 
-	y_size_type := box.config.size.y.type 
+	x_size_type := box.config.size.x.type
+	y_size_type := box.config.size.y.type
 
 	if x_size_type == .Fixed {
 		box.width = int(box.config.size.x.amount)
@@ -350,15 +349,21 @@ icon_rune := '0',
 		box.height = int(box.config.size.y.amount)
 	}
 
-	if x_size_type == .Fit_Text || x_size_type == .Fit_Text_And_Grow  {
-		box.width = int(font_get_strings_rendered_len(box.text, font_size)) + box.config.padding.left + box.config.padding.right
+	if x_size_type == .Fit_Text || x_size_type == .Fit_Text_And_Grow {
+		box.width =
+			int(font_get_strings_rendered_len(box.text, font_size)) +
+			box.config.padding.left +
+			box.config.padding.right
 	}
 	if y_size_type == .Fit_Text || y_size_type == .Fit_Text_And_Grow {
-		box.height = int(font_get_strings_rendered_height(box.text, font_size)) + box.config.padding.top + box.config.padding.bottom
+		box.height =
+			int(font_get_strings_rendered_height(box.text, font_size)) +
+			box.config.padding.top +
+			box.config.padding.bottom
 	}
-	box.keep = true
+	box.keep    = true
 	box.z_index = config.z_index
-	box.fresh = true
+	box.fresh   = true
 	if box.parent != nil {
 		if !(.Ignore_Parent_Disabled in box.flags) {
 			box.disabled = box.parent.disabled
@@ -368,14 +373,14 @@ icon_rune := '0',
 	return box
 }
 
-box_from_cache :: proc(flags: Box_Flags,
-config: Box_Config,
-label := "",
-id := "",
-metadata := Box_Metadata{},
-icon_rune :rune = '0'
-) -> ^Box 
-{
+box_from_cache :: proc(
+	flags: Box_Flags,
+	config: Box_Config,
+	label := "",
+	id := "",
+	metadata := Box_Metadata{},
+	icon_rune: rune = '0',
+) -> ^Box {
 	box: ^Box
 	is_new: bool
 	is_anon: bool
@@ -383,7 +388,7 @@ icon_rune :rune = '0'
 	if id == "" {
 		if ui_state.parents_top != nil {
 			parent := ui_state.parents_top
-			key = tprintf("{}-ac-{}", parent.id, parent.n_anon_children)
+			key     = tprintf("{}-ac-{}", parent.id, parent.n_anon_children)
 			parent.n_anon_children += 1
 		} else {
 			// If you provide a name but no ID, a global random ID will be generated.
@@ -396,34 +401,34 @@ icon_rune :rune = '0'
 	}
 
 	if key in ui_state.box_cache {
-		box = ui_state.box_cache[key]
-		box.fresh = false
-		box.keep = true
-		box.flags = flags
+		box        = ui_state.box_cache[key]
+		box.fresh  = false
+		box.keep   = true
+		box.flags  = flags
 		box.config = config
-		if box.config.font_size == 0 { 
+		if box.config.font_size == 0 {
 			box.config.font_size = 16
 		}
-		box.z_index = config.z_index
+		box.z_index   = config.z_index
 		box.icon_rune = icon_rune
 		// Label is recreated each frame, so it's temp allocated.
 		box.text = label
 
 		// Boxes with fixed sizing have their size set upon creation, so if we're retrieving a box from the cache
 		// we need to manually re-set it's sizing info for later layout calculations.
-		x_size_type := box.config.size.x.type 
-		y_size_type := box.config.size.y.type 
+		x_size_type := box.config.size.x.type
+		y_size_type := box.config.size.y.type
 		// Not sure if you even need to skip .Fixed sized boxes here... Need to double check.
 		// if x_size_type != .Fixed {
 		box.prev_width = box.width
-		box.width = 0
+		box.width      = 0
 		// }
 		// if y_size_type != .Fixed {
 		box.prev_height = box.height
-		box.height = 0
+		box.height      = 0
 		// }
 
-		if x_size_type == .Fixed do box.width  = int(box.config.size.x.amount)
+		if x_size_type == .Fixed do box.width = int(box.config.size.x.amount)
 		if y_size_type == .Fixed do box.height = int(box.config.size.y.amount)
 
 		font_size := box.config.font_size
@@ -433,16 +438,18 @@ icon_rune :rune = '0'
 		}
 		if y_size_type == .Fit_Text || y_size_type == .Fit_Text_And_Grow {
 			box.height =
-				font_get_strings_rendered_height(box.text, font_size) + box.config.padding.top + box.config.padding.bottom
+				font_get_strings_rendered_height(box.text, font_size) +
+				box.config.padding.top +
+				box.config.padding.bottom
 		}
 		clear(&box.children)
 		box.n_anon_children = 0
 		box_clamp_to_constraints(box)
 	} else {
-		is_new = true
-		new_box := box_make(flags, config, label, key, icon_rune=icon_rune)
+		is_new   = true
+		new_box := box_make(flags, config, label, key, icon_rune = icon_rune)
 		ui_state.box_cache[new_box.id] = new_box
-		box = new_box
+		box      = new_box
 	}
 
 	// Re-establish parent-child link for boxes from the cache. If we didn't do this and we for example removed
@@ -457,8 +464,8 @@ icon_rune :rune = '0'
 			// box.z_index = box.parent.z_index + 1
 		}
 	}
-	if box.parent != nil { 
-		if .Ignore_Parent_Disabled not_in box.flags { 
+	if box.parent != nil {
+		if .Ignore_Parent_Disabled not_in box.flags {
 			box.disabled = box.parent.disabled
 		}
 	}
@@ -476,7 +483,7 @@ box_open_children :: proc(box: ^Box, child_layout: Box_Child_Layout) -> ^Box {
 
 box_close_children :: proc {
 	box_floating_close_children,
-	box_regular_close_children
+	box_regular_close_children,
 }
 
 
@@ -487,7 +494,7 @@ box_floating_close_children :: proc(signals: Box_Signals, _: Box_Signals, _: Box
 // Takes in signals since this is automatically called at the end of creation various 'container' boxes.
 // And all box creation functions return the signals for the box.
 box_regular_close_children :: proc(signals: Box_Signals) {
-	box := signals.box
+	box  := signals.box
 	size := box.config.size
 	assert(len(ui_state.parents_stack) > 0)
 	if size.x.type == .Fit_Children || size.x.type == .Fit_Children_And_Grow {
@@ -511,7 +518,6 @@ box_regular_close_children :: proc(signals: Box_Signals) {
 /* ======================= End Core Box Code ========================= */
 
 
-
 /* ============================ Signal Handling =========================== */
 handle_input :: proc(event: sdl.Event) -> (exit: bool) {
 	// show_context_menu = ui_state.context_menu.active
@@ -522,7 +528,7 @@ handle_input :: proc(event: sdl.Event) -> (exit: bool) {
 	}
 
 	if etype == .MOUSEMOTION {
-		mouse_x, mouse_y:i32
+		mouse_x, mouse_y: i32
 		sdl.GetMouseState(&mouse_x, &mouse_y)
 		x := int(event.motion.x)
 		y := int(event.motion.y)
@@ -530,7 +536,7 @@ handle_input :: proc(event: sdl.Event) -> (exit: bool) {
 		app.mouse.pos.x = int(mouse_x)
 		app.mouse.pos.y = int(mouse_y)
 		// printfln("GetMouseState values: [{}, {}]\n", app.mouse.pos.x, app.mouse.pos.y)
-		if ([2]int{x,y} != app.mouse.pos.xy) { 
+		if ([2]int{x, y} != app.mouse.pos.xy) {
 			println("fuaaaaaark ^^^^^^")
 		}
 	}
@@ -540,12 +546,12 @@ handle_input :: proc(event: sdl.Event) -> (exit: bool) {
 	// It would work for querying if we're in the state to trigger some keyboard shortcut however.
 	if etype == .KEYDOWN {
 		#partial switch event.key.keysym.sym {
-			case .ESCAPE:
-				ui_state.dragged_box = nil
-			case:
-				app.char_queue[app.curr_chars_stored] = event.key.keysym.sym
-				app.curr_chars_stored += 1
-				app.keys_held[event.key.keysym.scancode] = true
+		case .ESCAPE:
+			ui_state.dragged_box = nil
+		case:
+			app.char_queue[app.curr_chars_stored] = event.key.keysym.sym
+			app.curr_chars_stored += 1
+			app.keys_held[event.key.keysym.scancode] = true
 		}
 	}
 
@@ -556,7 +562,6 @@ handle_input :: proc(event: sdl.Event) -> (exit: bool) {
 	if etype == .MOUSEWHEEL {
 		app.mouse.wheel.x = cast(i8)event.wheel.x
 		app.mouse.wheel.y = cast(i8)event.wheel.y
-		println("got mousewhell event, mouse wheel state is: {}", app.mouse.wheel)
 	}
 
 	if etype == .MOUSEBUTTONDOWN {
@@ -564,8 +569,8 @@ handle_input :: proc(event: sdl.Event) -> (exit: bool) {
 		case sdl.BUTTON_LEFT:
 			if !app.mouse.left_pressed { 	// i.e. if left button wasn't pressed last frame
 				app.mouse.drag_start = app.mouse.pos
-				app.mouse.dragging = true
-				app.mouse.drag_done = false
+				app.mouse.dragging   = true
+				app.mouse.drag_done  = false
 			}
 			app.mouse.left_pressed = true
 		case sdl.BUTTON_RIGHT:
@@ -580,15 +585,15 @@ handle_input :: proc(event: sdl.Event) -> (exit: bool) {
 				app.mouse.clicked = true
 			}
 			app.mouse.left_pressed = false
-			app.mouse.drag_end = app.mouse.pos
-			app.mouse.dragging = false
-			app.mouse.drag_done = true
+			app.mouse.drag_end     = app.mouse.pos
+			app.mouse.dragging     = false
+			app.mouse.drag_done    = true
 
 		case sdl.BUTTON_RIGHT:
 			if app.mouse.right_pressed { 	// i.e. A right click was performed.
-				app.mouse.right_clicked = true
+				app.mouse.right_clicked      = true
 				ui_state.context_menu.active = true
-				ui_state.context_menu.pos = Vec2_f32{f32(app.mouse.pos.x), f32(app.mouse.pos.y)}
+				ui_state.context_menu.pos    = Vec2_f32{f32(app.mouse.pos.x), f32(app.mouse.pos.y)}
 			}
 			app.mouse.right_pressed = false
 		}
@@ -609,30 +614,10 @@ register_resize :: proc() -> bool {
 		// Setup new texture on resize, would've though you can like 'update' it on the fly instead of recalling
 		// TexImage2D, but no idea if it's problematic or not....
 		gl.BindTexture(gl.TEXTURE_2D, ui_state.tex_id_offscreen_ui)
-		gl.TexImage2D(
-			gl.TEXTURE_2D,
-			0,
-			gl.RGBA8,
-			i32(app.wx),
-			i32(app.wy),
-			0,
-			gl.RGBA,
-			gl.UNSIGNED_BYTE,
-			nil
-		)
+		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, i32(app.wx), i32(app.wy), 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
 
 		gl.BindTexture(gl.TEXTURE_2D, ui_state.tex_id_blurred_ui)
-		gl.TexImage2D(
-			gl.TEXTURE_2D,
-			0,
-			gl.RGBA8,
-			i32(app.wx),
-			i32(app.wy),
-			0,
-			gl.RGBA,
-			gl.UNSIGNED_BYTE,
-			nil
-		)
+		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, i32(app.wx), i32(app.wy), 0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
 		return true
 	}
 
@@ -642,7 +627,7 @@ register_resize :: proc() -> bool {
 }
 
 reset_mouse_state :: proc() {
-	app.mouse.wheel = {0, 0}
+	app.mouse.wheel      = {0, 0}
 	app.mouse_last_frame = app.mouse
 	if app.mouse.clicked {
 		// do this here because events are captured before ui is created,
@@ -653,27 +638,24 @@ reset_mouse_state :: proc() {
 		// 	ui_state.context_menu.active = false
 		// }
 	}
-	app.mouse.clicked = false
+	app.mouse.clicked       = false
 	app.mouse.right_clicked = false
 }
 
 mouse_inside_box :: proc(box: ^Box, mouse: [2]int) -> bool {
-	mousex := int(mouse.x)
-	mousey := int(mouse.y)
-	top_left := box.top_left
+	mousex       := int(mouse.x)
+	mousey       := int(mouse.y)
+	top_left     := box.top_left
 	bottom_right := box.bottom_right
-	return mousex >= top_left.x 	&& 
-		   mousex <= bottom_right.x && 
-		   mousey >= top_left.y 	&& 
-		   mousey <= bottom_right.y
+	return mousex >= top_left.x && mousex <= bottom_right.x && mousey >= top_left.y && mousey <= bottom_right.y
 }
 
 box_signals :: proc(box: ^Box) -> Box_Signals {
 	// Return signals computed in previous frame if they exist
 	if stored_signals, ok := ui_state.frame_signals[box.id]; ok {
-		// Update box visual state these 
-		box.hot = stored_signals.hovering
-		box.active = stored_signals.pressed || stored_signals.clicked
+		// Update box visual state these
+		box.hot     = stored_signals.hovering
+		box.active  = stored_signals.pressed || stored_signals.clicked
 		box.signals = stored_signals
 		return stored_signals
 	} else {
@@ -690,14 +672,15 @@ box_signals :: proc(box: ^Box) -> Box_Signals {
 
 collect_frame_signals :: proc(root: ^Box) {
 	candidates_at_mouse := make([dynamic]^Box, allocator = context.temp_allocator)
-	box_list := box_tree_to_list(root, context.temp_allocator)
+	box_list            := box_tree_to_list(root, context.temp_allocator)
 	// Find all boxes under mouse
 	for box in box_list {
 		viewport_box := Box {
-			top_left = box.clip_tl,
-			bottom_right = box.clip_br
-		} 
-		if mouse_inside_box(box, app.mouse.pos) && .Clickable in box.flags &&
+			top_left     = box.clip_tl,
+			bottom_right = box.clip_br,
+		}
+		if mouse_inside_box(box, app.mouse.pos)       &&
+		.Clickable in box.flags &&
 		mouse_inside_box(&viewport_box, app.mouse.pos)
 		{
 			append(&candidates_at_mouse, box)
@@ -708,13 +691,13 @@ collect_frame_signals :: proc(root: ^Box) {
 	hot_box: ^Box
 	hot_scrollable_box: ^Box
 	if len(candidates_at_mouse) > 0 {
-		hot_box = candidates_at_mouse[0]
+		hot_box            = candidates_at_mouse[0]
 		hot_scrollable_box = candidates_at_mouse[0]
 		for box in candidates_at_mouse[1:] {
 			if box.z_index >= hot_box.z_index {
 				hot_box = box
 			}
-			if .Scrollable in box.flags { 
+			if .Scrollable in box.flags {
 				if box.z_index >= hot_scrollable_box.z_index {
 					hot_scrollable_box = box
 				}
@@ -732,15 +715,15 @@ collect_frame_signals :: proc(root: ^Box) {
 	// Process all boxes
 	for box in box_list {
 		viewport_box := Box {
-			top_left = box.clip_tl,
-			bottom_right = box.clip_br
+			top_left     = box.clip_tl,
+			bottom_right = box.clip_br,
 		}
 		// if box.parent != nil && !mouse_inside_box(box.parent, app.mouse.pos) do continue
 		next_signals: Box_Signals
 		next_signals.box = box
 
 		// Skip signal gathering if box is disabled.
-		if box.disabled { 
+		if box.disabled {
 			// One second thoughts, this is probably overkill since we might want to, for example
 			// right click and activate a track, if it's disabled, we can't do that.
 			continue
@@ -771,12 +754,13 @@ collect_frame_signals :: proc(root: ^Box) {
 				if app.keys_held[sdl.Scancode.LSHIFT] || app.keys_held[sdl.Scancode.RSHIFT] {
 					next_signals.shift_clicked = true
 				}
-				ui_state.last_clicked_box = box
+				ui_state.last_clicked_box      = box
 				ui_state.last_clicked_box_time = time.now()
 			}
 
 			if !app.mouse.left_pressed && prev_siganls.pressed {
-				if .Drag_Drop_Sink in box.flags && (ui_state.dragged_box != nil && .Drag_Drop_Source in ui_state.dragged_box.(^Box).flags) {
+				if .Drag_Drop_Sink in box.flags &&
+				   (ui_state.dragged_box != nil && .Drag_Drop_Source in ui_state.dragged_box.(^Box).flags) {
 					next_signals.dropped_on = true
 				}
 			}
@@ -785,7 +769,7 @@ collect_frame_signals :: proc(root: ^Box) {
 				next_signals.right_pressed = true
 			} else if prev_siganls.right_pressed {
 				next_signals.right_clicked = true
-				ui_state.right_clicked_on = box
+				ui_state.right_clicked_on  = box
 			}
 		}
 
@@ -801,20 +785,20 @@ collect_frame_signals :: proc(root: ^Box) {
 				if ui_state.dragged_box == nil {
 					ui_state.dragged_box = box
 				}
-			} 
+			}
 			next_signals.dragged_over = next_signals.pressed
 			// if app.mouse.wheel.y != 0 && .Scrollable in box.flags {
 			if .Scrollable in box.flags && (box == hot_scrollable_box || is_ancestor(box, hot_scrollable_box)) {
 				if app.keys_held[sdl.Scancode.LSHIFT] || app.keys_held[sdl.Scancode.RSHIFT] {
 					next_signals.shift_scrolled_up    = app.mouse.wheel.y > 0
-					next_signals.shift_scrolled_down  = app.mouse.wheel.y < 0 
+					next_signals.shift_scrolled_down  = app.mouse.wheel.y < 0
 					next_signals.shift_scrolled_left  = app.mouse.wheel.x > 0
-					next_signals.shift_scrolled_right = app.mouse.wheel.x < 0 
-				} else { 
+					next_signals.shift_scrolled_right = app.mouse.wheel.x < 0
+				} else {
 					next_signals.scrolled_up    = app.mouse.wheel.y > 0
-					next_signals.scrolled_down  = app.mouse.wheel.y < 0 
+					next_signals.scrolled_down  = app.mouse.wheel.y < 0
 					next_signals.scrolled_left  = app.mouse.wheel.x > 0
-					next_signals.scrolled_right = app.mouse.wheel.x < 0 
+					next_signals.scrolled_right = app.mouse.wheel.x < 0
 				}
 			}
 		}
@@ -831,7 +815,7 @@ collect_frame_signals :: proc(root: ^Box) {
 box_tree_to_list :: proc(root: ^Box, allocator := context.allocator) -> [dynamic]^Box {
 	recurse_and_add :: proc(box: ^Box, list: ^[dynamic]^Box) {
 		append(list, box)
-		for child in box.children { 
+		for child in box.children {
 			recurse_and_add(child, list)
 		}
 	}
@@ -840,7 +824,7 @@ box_tree_to_list :: proc(root: ^Box, allocator := context.allocator) -> [dynamic
 	return list
 }
 
-// Parses UI tree of boxes and gives you back a flat list. Also calculates if we need to add scrollbars to 
+// Parses UI tree of boxes and gives you back a flat list. Also calculates if we need to add scrollbars to
 // boxes whose children overflow it + calculates clipping rects.
 box_tree_to_list_complex :: proc(root: ^Box, allocator := context.allocator) -> [dynamic]^Box {
 	/*
@@ -856,12 +840,12 @@ box_tree_to_list_complex :: proc(root: ^Box, allocator := context.allocator) -> 
 		if box.config.overflow_x != .Visible {
 			box.clip_tl.x = box.top_left.x
 			box.clip_br.x = box.bottom_right.x
-		}	
+		}
 
 		if box.config.overflow_y != .Visible {
 			box.clip_tl.y = box.top_left.y
 			box.clip_br.y = box.bottom_right.y
-		} 
+		}
 
 		append(list, box)
 
@@ -871,28 +855,26 @@ box_tree_to_list_complex :: proc(root: ^Box, allocator := context.allocator) -> 
 		children_tot_height := boxes_children_tot_height(box^)
 		children_tot_width  := boxes_children_tot_width(box^)
 		if box.config.overflow_x != .Visible && box.config.overflow_x != .Hidden {
-			overflowed_x = children_tot_width > box.width 
+			overflowed_x = children_tot_width > box.width
 		}
 		if box.config.overflow_y != .Visible && box.config.overflow_y != .Hidden {
-			overflowed_y =  children_tot_height > box.height 
+			overflowed_y = children_tot_height > box.height
 		}
 
 		if overflowed_x {
 			hori_scroll_track := box_from_cache(
 				{.Draw, .Clickable, .Draggable, .Scrollable},
-				{
-					color = .Warning_Container,
-				},
-				id = tprintf("{}-hori-scroll-track", box.id)
+				{color = .Warning_Container},
+				id = tprintf("{}-hori-scroll-track", box.id),
 			)
 			hori_scroll_track.top_left     = {box.top_left.x, box.bottom_right.y + 30}
 			hori_scroll_track.bottom_right = box.bottom_right
-			hori_scroll_track.width = box.width
-			hori_scroll_track.height = 30
+			hori_scroll_track.width        = box.width
+			hori_scroll_track.height       = 30
 		}
 
 		if overflowed_y {
-			scroll_offset:  = 0
+			scroll_offset := 0
 			if box.id in ui_state.scroll_offsets {
 				scroll_offset = ui_state.scroll_offsets[box.id]
 			} else {
@@ -902,21 +884,21 @@ box_tree_to_list_complex :: proc(root: ^Box, allocator := context.allocator) -> 
 			track := box_from_cache(
 				{.Draw, .Clickable, .Draggable, .Scrollable, .Frosted, .Glow},
 				{
-					color = .Warning_Container,
-					z_index = 30,
-					corner_radius = 8, 
+					color         = .Warning_Container,
+					z_index       = 30,
+					corner_radius = 8,
 				},
-				id = tprintf("{}-vert-scroll-track", box.id)
+				id = tprintf("{}-vert-scroll-track", box.id),
 			)
 			track.top_left     = {box.bottom_right.x - 10, box.top_left.y}
 			track.bottom_right = box.bottom_right
-			track.width 	   = 10 
-			track.height 	   = box.height
-			track_signals 	  := box_signals(track)
+			track.width        = 10
+			track.height       = box.height
+			track_signals     := box_signals(track)
 
 			CHANGE_PER_TICK :: 40
 			max_scroll := children_tot_height - box.height
-			if track_signals.scrolled_up || box.signals.scrolled_up { 
+			if track_signals.scrolled_up || box.signals.scrolled_up {
 				scroll_offset = clamp(scroll_offset - CHANGE_PER_TICK, 0, max_scroll)
 			} else if track_signals.scrolled_down || box.signals.scrolled_down {
 				scroll_offset = clamp(scroll_offset + CHANGE_PER_TICK, 0, max_scroll)
@@ -929,16 +911,16 @@ box_tree_to_list_complex :: proc(root: ^Box, allocator := context.allocator) -> 
 			handle := box_from_cache(
 				{.Draw, .Clickable, .Draggable, .Scrollable, .Hot_Animation, .Active_Animation, .Frosted},
 				{
-					color = .Warning,
-					z_index = 100,
-					corner_radius = 2, 
+					color         = .Warning,
+					z_index       = 100,
+					corner_radius = 2,
 				},
-				id = tprintf("{}-vert-scroll-handle", box.id)
+				id = tprintf("{}-vert-scroll-handle", box.id),
 			)
 
 			handle_width  := 10
-			handle_height :=  int(f32(box.height) * (f32(box.height) / f32(children_tot_height)))
-			handle_height = clamp(handle_height, 20, handle_height)
+			handle_height := int(f32(box.height) * (f32(box.height) / f32(children_tot_height)))
+			handle_height  = clamp(handle_height, 20, handle_height)
 
 			// handle.top_left     = {track.top_left.x, clamp(int(f32(track.bottom_right.y) * scroll_offset), box.top_left.y, box.bottom_right.y - handle_height)}
 			track_scrollable_range := track.height - handle_height
@@ -946,16 +928,16 @@ box_tree_to_list_complex :: proc(root: ^Box, allocator := context.allocator) -> 
 			if max_scroll > 0 {
 				scroll_ratio = f32(scroll_offset) / f32(max_scroll)
 			}
-			handle_y := track.top_left.y + int(scroll_ratio * f32(track_scrollable_range))
-			handle.top_left = {track.top_left.x, handle_y}
-			handle.bottom_right = handle.top_left + {handle_width, handle_height} 
+			handle_y           := track.top_left.y + int(scroll_ratio * f32(track_scrollable_range))
+			handle.top_left     = {track.top_left.x, handle_y}
+			handle.bottom_right = handle.top_left + {handle_width, handle_height}
 
-			handle.width 	    = handle_width
-			handle.height 	    = handle_height
-			handle_signals     := box_signals(handle)
+			handle.width    = handle_width
+			handle.height   = handle_height
+			handle_signals := box_signals(handle)
 
-			if handle_signals.hovering { 
-				handle.top_left 	-= {1, 1}
+			if handle_signals.hovering {
+				handle.top_left     -= {1, 1}
 				handle.bottom_right += {1, 1}
 			}
 			if .Scrollbar in box.flags {
@@ -969,7 +951,7 @@ box_tree_to_list_complex :: proc(root: ^Box, allocator := context.allocator) -> 
 			// shift_amount := int(scroll_offset * f32(clipped_amount))
 			shift_children :: proc(box: Box, shift_amount: int) {
 				for child in box.children {
-					child.top_left 	   -= {0, shift_amount}
+					child.top_left     -= {0, shift_amount}
 					child.bottom_right -= {0, shift_amount}
 					shift_children(child^, shift_amount)
 				}
@@ -978,7 +960,7 @@ box_tree_to_list_complex :: proc(root: ^Box, allocator := context.allocator) -> 
 
 		}
 
-		if overflowed_x && overflowed_y { 
+		if overflowed_x && overflowed_y {
 			// Need to account for when both scroll bars are in place, as they will collide
 			// in the bottom right corner, so we need to shrink each one accordingly.
 		}
@@ -994,14 +976,14 @@ box_tree_to_list_complex :: proc(root: ^Box, allocator := context.allocator) -> 
 }
 
 // z-position is set to 0 as default, any box which still has 0 after creation, will inherit the z-index of it's parent.
-flow_z_positions::proc(root: ^Box) {
-	for child in root.children { 
-		if child.z_index == 0 {  
+flow_z_positions :: proc(root: ^Box) {
+	for child in root.children {
+		if child.z_index == 0 {
 			child.z_index = root.z_index
 		}
 	}
 
-	for child in root.children { 
+	for child in root.children {
 		flow_z_positions(child)
 	}
 }
@@ -1016,7 +998,7 @@ sizing_calc_fit_children_width :: proc(box: Box) -> int {
 
 	case .Horizontal:
 		for child in box.children {
-			if child.config.floating_type == .Not_Floating{
+			if child.config.floating_type == .Not_Floating {
 				total += child.width + box_get_margin_x_tot(child^)
 			}
 		}
@@ -1075,20 +1057,20 @@ sizing_calc_fit_children_height :: proc(box: Box) -> int {
 
 // Re-calculates .Fit_Children sizing after grow/percent passes have updated children
 recalc_fit_children_sizing :: proc(box: ^Box) {
-    // Recurse to children
-    for child in box.children {
-        recalc_fit_children_sizing(child)
-    }
+	// Recurse to children
+	for child in box.children {
+		recalc_fit_children_sizing(child)
+	}
 
 	x_size_type := box.config.size.x.type
-    if x_size_type == .Fit_Children || x_size_type == .Fit_Children_And_Grow {
-        box.width = sizing_calc_fit_children_width(box^)
-    }
+	if x_size_type == .Fit_Children || x_size_type == .Fit_Children_And_Grow {
+		box.width = sizing_calc_fit_children_width(box^)
+	}
 
 	y_size_type := box.config.size.y.type
-    if y_size_type == .Fit_Children || y_size_type == .Fit_Children_And_Grow {
-        box.height = sizing_calc_fit_children_height(box^)
-    }
+	if y_size_type == .Fit_Children || y_size_type == .Fit_Children_And_Grow {
+		box.height = sizing_calc_fit_children_height(box^)
+	}
 
 	box_clamp_to_constraints(box)
 }
@@ -1097,7 +1079,7 @@ recalc_fit_children_sizing :: proc(box: ^Box) {
 num_of_non_floating_children :: proc(box: Box) -> int {
 	tot := 0
 	for child in box.children {
-		if child.config.floating_type  == .Not_Floating{
+		if child.config.floating_type == .Not_Floating {
 			tot += 1
 		}
 	}
@@ -1127,32 +1109,32 @@ box_clamp_to_constraints :: proc(box: ^Box) {
 sizing_grow_growable_width :: proc(box: ^Box) {
 	switch box.child_layout.direction {
 	case .Horizontal:
-		remaining_width := box.width - box_get_padding_x_tot(box^) 
+		remaining_width   := box.width - box_get_padding_x_tot(box^)
 		growable_children := make([dynamic]^Box, allocator = context.temp_allocator)
 		for child in box.children {
 			if child.config.floating_type != .Not_Floating {
 				continue
 			}
 			remaining_width -= child.width + box_get_margin_x_tot(child^)
-			size_type := child.config.size.x.type
+			size_type      := child.config.size.x.type
 			if size_type == .Grow || size_type == .Fit_Text_And_Grow || size_type == .Fit_Children_And_Grow {
 				append(&growable_children, child)
 			}
 		}
 		remaining_width -= (num_of_non_floating_children(box^) - 1) * box.child_layout.gap_horizontal
 		for remaining_width > 0 {
-			smallest := 2 << 30
+			smallest        := 2 << 30
 			second_smallest := 2 << 30
-			width_increase := remaining_width
+			width_increase  := remaining_width
 			for child in growable_children {
 				child_tot_width := child.width + box_get_margin_x_tot(child^)
 				if child_tot_width < smallest {
 					second_smallest = smallest
-					smallest = child_tot_width
+					smallest        = child_tot_width
 				}
 				if child_tot_width > smallest {
 					second_smallest = min(second_smallest, child_tot_width)
-					width_increase = second_smallest - smallest
+					width_increase  = second_smallest - smallest
 				}
 			}
 			if len(growable_children) == 0 {
@@ -1164,7 +1146,7 @@ sizing_grow_growable_width :: proc(box: ^Box) {
 			}
 			for child in growable_children {
 				child_tot_width := child.width + box_get_margin_x_tot(child^)
-				if  child_tot_width == smallest {
+				if child_tot_width == smallest {
 					child.width += width_increase
 					box_clamp_to_constraints(child)
 					remaining_width -= width_increase
@@ -1179,7 +1161,7 @@ sizing_grow_growable_width :: proc(box: ^Box) {
 				continue
 			}
 			size_type := child.config.size.x.type
-			if size_type == .Grow || size_type == .Fit_Text_And_Grow  || size_type == .Fit_Children_And_Grow {
+			if size_type == .Grow || size_type == .Fit_Text_And_Grow || size_type == .Fit_Children_And_Grow {
 				child.width += growable_amount - (child.width + box_get_margin_x_tot(child^))
 				box_clamp_to_constraints(child)
 				sizing_calc_percent_width(child)
@@ -1195,28 +1177,28 @@ sizing_grow_growable_width :: proc(box: ^Box) {
 sizing_grow_growable_height :: proc(box: ^Box) {
 	switch box.child_layout.direction {
 	case .Vertical:
-		remaining_height := box.height - box_get_padding_y_tot(box^)
+		remaining_height  := box.height - box_get_padding_y_tot(box^)
 		growable_children := make([dynamic]^Box, allocator = context.temp_allocator)
 		for child in box.children {
-			if child.config.floating_type != .Not_Floating{
+			if child.config.floating_type != .Not_Floating {
 				continue
 			}
 			remaining_height -= child.height + box_get_margin_y_tot(child^)
-			size_type := child.config.size.y.type
-			if size_type == .Grow  || size_type == .Fit_Text_And_Grow || size_type == .Fit_Children_And_Grow {
+			size_type       := child.config.size.y.type
+			if size_type == .Grow || size_type == .Fit_Text_And_Grow || size_type == .Fit_Children_And_Grow {
 				append(&growable_children, child)
 			}
 		}
 		remaining_height -= (num_of_non_floating_children(box^) - 1) * box.child_layout.gap_vertical
 		for remaining_height > 0 {
-			smallest := 2 << 30
+			smallest        := 2 << 30
 			second_smallest := 2 << 30
 			height_increase := remaining_height
 			for child in growable_children {
 				child_tot_height := child.height + box_get_margin_y_tot(child^)
 				if child_tot_height < smallest {
 					second_smallest = smallest
-					smallest = child_tot_height
+					smallest        = child_tot_height
 				}
 				if child_tot_height > smallest {
 					second_smallest = min(second_smallest, child_tot_height)
@@ -1226,14 +1208,14 @@ sizing_grow_growable_height :: proc(box: ^Box) {
 			// Have to check the logic here is correct.
 			if len(growable_children) == 0 {
 				// return <--- this was causing the recursion at the bottom of this function to not run
-							// that recursion HAS to run. 
+				// that recursion HAS to run.
 				// return
 				break
 			}
 			height_increase = min(height_increase, remaining_height / len(growable_children))
 			if height_increase == 0 {
 				// return <--- this was causing the recursion at the bottom of this function to not run
-							// that recursion HAS to run. 
+				// that recursion HAS to run.
 				// return
 				break
 			}
@@ -1336,7 +1318,7 @@ calc_text_wrap :: proc(root: Box) {
 non_floating_children :: proc(box: ^Box, allocator := context.temp_allocator) -> [dynamic]^Box {
 	res := make([dynamic]^Box, allocator)
 	for child in box.children {
-		if child.config.floating_type  == .Not_Floating{
+		if child.config.floating_type == .Not_Floating {
 			append(&res, child)
 		}
 	}
@@ -1350,55 +1332,62 @@ We continue like this from the root down to all leaves.
 */
 position_boxes :: proc(root: ^Box) {
 	// 100% offset means the far edge of the box is inline with the far edge of the inside
-	// of the parents space. 
+	// of the parents space.
 	// All relative values are [0..=1], 0 = 0%, 0.5 = 50%, 1 = 100%.
 	position_absolute :: proc(parent: ^Box, child: ^Box) {
 		switch child.config.floating_type {
 		// Kind of ugly but here the 'floating_offset' is in absolute pixel amounts, unlike the other
 		// relative sizing types where it's a percentage of the parents width / height.
 		case .Absolute_Pixel:
-			child.top_left = {int(child.config.floating_offset.x), int(child.config.floating_offset.y)}
+			child.top_left     = {int(child.config.floating_offset.x), int(child.config.floating_offset.y)}
 			child.bottom_right = child.top_left + {child.width, child.height}
 
 		case .Relative_Root:
-			width_diff := f32(parent.width - child.width)
+			width_diff  := f32(parent.width - child.width)
 			height_diff := f32(parent.height - child.height)
 
 			offset_x := int(width_diff * child.config.floating_offset.x)
 			offset_y := int(height_diff * child.config.floating_offset.y)
 
-			child.top_left = {parent.top_left.x + offset_x, parent.top_left.y + offset_y}
+			child.top_left     = {parent.top_left.x + offset_x, parent.top_left.y + offset_y}
 			child.bottom_right = {child.top_left.x + child.width, child.top_left.y + child.height}
 		case .Relative_Other:
 			assert(child.config.floating_anchor_box != nil)
-			other_box := child.config.floating_anchor_box
-			width_diff := f32(other_box.width - child.width)
+			other_box   := child.config.floating_anchor_box
+			width_diff  := f32(other_box.width - child.width)
 			height_diff := f32(other_box.height - child.height)
 
 			offset_x := int(width_diff * child.config.floating_offset.x)
 			offset_y := int(height_diff * child.config.floating_offset.y)
 
 
-			child.top_left = {other_box.top_left.x + offset_x, other_box.top_left.y + offset_y}
+			child.top_left     = {other_box.top_left.x + offset_x, other_box.top_left.y + offset_y}
 			child.bottom_right = {child.top_left.x + child.width, child.top_left.y + child.height}
 		case .Relative_Parent:
-			width_diff := f32(child.parent.width - child.width)
+			width_diff  := f32(child.parent.width - child.width)
 			height_diff := f32(child.parent.height - child.height)
 
 			offset_x := int(width_diff * child.config.floating_offset.x)
 			offset_y := int(height_diff * child.config.floating_offset.y)
 
 
-			child.top_left = {child.parent.top_left.x + offset_x, child.parent.top_left.y + offset_y}
+			child.top_left     = {child.parent.top_left.x + offset_x, child.parent.top_left.y + offset_y}
 			child.bottom_right = {child.top_left.x + child.width, child.top_left.y + child.height}
 
 		case .Center_Right:
-			child.top_left = {app.wx - child.width, (app.wy / 2) - (child.height/2)}
+			child.top_left     = {app.wx - child.width, (app.wy / 2) - (child.height / 2)}
 			child.bottom_right = child.top_left + {child.width, child.height}
 		case .Top_Right:
-			child.top_left = {app.wx - child.width, 0}
+			child.top_left     = {app.wx - child.width, 0}
 			child.bottom_right = child.top_left + {child.width, child.height}
-		case .Bottom_Center, .Bottom_Left,.Bottom_Right, .Top_Center, .Top_Left, .Not_Floating, .Center_Center, .Center_Left:
+		case .Bottom_Center,
+		     .Bottom_Left,
+		     .Bottom_Right,
+		     .Top_Center,
+		     .Top_Left,
+		     .Not_Floating,
+		     .Center_Center,
+		     .Center_Left:
 			panic(tprintf("Have not implemented position child with floating type: {}", child.config.floating_type))
 		}
 	}
@@ -1411,24 +1400,25 @@ position_boxes :: proc(root: ^Box) {
 			if prev_sibling == nil {
 				child.top_left.x = start_x + child.config.margin.left
 			} else {
-				child.top_left.x = prev_sibling.bottom_right.x + prev_sibling.config.margin.right + gap + child.config.margin.left
+				child.top_left.x =
+					prev_sibling.bottom_right.x + prev_sibling.config.margin.right + gap + child.config.margin.left
 			}
 			child.bottom_right.x = child.top_left.x + child.width
-			prev_sibling = child
+			prev_sibling         = child
 		}
 	}
 
 	position_horizontally_start :: proc(root: ^Box) {
-		start_x := root.top_left.x + root.config.padding.left
-		gap := root.child_layout.gap_horizontal
+		start_x        := root.top_left.x + root.config.padding.left
+		gap            := root.child_layout.gap_horizontal
 		valid_children := non_floating_children(root)
 		place_siblings_horizontally(root^, valid_children[:], start_x, gap)
 	}
 
 	position_horizontally_center :: proc(root: ^Box) {
 		total_child_width := 0
-		gap := root.child_layout.gap_horizontal
-		valid_children := non_floating_children(root)
+		gap               := root.child_layout.gap_horizontal
+		valid_children    := non_floating_children(root)
 		for child in valid_children {
 			total_child_width += child.width + box_get_margin_x_tot(child^)
 		}
@@ -1439,21 +1429,21 @@ position_boxes :: proc(root: ^Box) {
 					root.config.padding.right)
 
 		half_width := available_width / 2
-		start_x := root.top_left.x + half_width + root.config.padding.left
+		start_x    := root.top_left.x + half_width + root.config.padding.left
 		place_siblings_horizontally(root^, valid_children[:], start_x, gap)
 	}
 
 	// Could probably just iterate backwards from the root.bottom_right.x.
 	position_horizontally_end :: proc(root: ^Box) {
-		gap := root.child_layout.gap_horizontal
-		padding := root.config.padding.left + root.config.padding.right
+		gap                   := root.child_layout.gap_horizontal
+		padding               := root.config.padding.left + root.config.padding.right
 		total_child_raw_width := 0
-		valid_children := non_floating_children(root)
+		valid_children        := non_floating_children(root)
 		for child in valid_children {
 			total_child_raw_width += child.width + box_get_margin_x_tot(child^)
 		}
 		total_child_width := total_child_raw_width + (gap * (len(valid_children) - 1) + padding)
-		start_x := root.bottom_right.x - total_child_width
+		start_x           := root.bottom_right.x - total_child_width
 		place_siblings_horizontally(root^, valid_children[:], start_x, gap)
 	}
 
@@ -1461,14 +1451,14 @@ position_boxes :: proc(root: ^Box) {
 	// and first child and end edge and last child.
 	position_horizontally_space_around :: proc(root: ^Box) {
 		total_child_width := 0
-		valid_children := non_floating_children(root)
+		valid_children    := non_floating_children(root)
 		for child in valid_children {
 			total_child_width += child.width + box_get_margin_x_tot(child^)
 		}
 		remaining_space := root.width - total_child_width
-		n_gaps := len(root.children) + 1
-		gap := int(f32(remaining_space) / f32(n_gaps))
-		start_x := root.top_left.x + gap
+		n_gaps          := len(root.children) + 1
+		gap             := int(f32(remaining_space) / f32(n_gaps))
+		start_x         := root.top_left.x + gap
 		place_siblings_horizontally(root^, valid_children[:], start_x, gap)
 	}
 
@@ -1476,17 +1466,17 @@ position_boxes :: proc(root: ^Box) {
 	// Only left and right padding matter here.
 	position_horizontally_space_between :: proc(root: ^Box) {
 		// Gap will be ignored since items won't really be next to each other.
-		padding := root.config.padding.left + root.config.padding.right
+		padding               := root.config.padding.left + root.config.padding.right
 		total_child_raw_width := 0
-		valid_children := non_floating_children(root)
+		valid_children        := non_floating_children(root)
 		for child in valid_children {
 			total_child_raw_width += child.width + box_get_margin_x_tot(child^)
 		}
 		total_child_width := total_child_raw_width + padding
-		remaining_space := root.width - total_child_width
-		n_gaps := len(root.children) - 1
-		gap := int(f32(remaining_space) / f32(n_gaps))
-		start_x := root.top_left.x + root.config.padding.left
+		remaining_space   := root.width - total_child_width
+		n_gaps            := len(root.children) - 1
+		gap               := int(f32(remaining_space) / f32(n_gaps))
+		start_x           := root.top_left.x + root.config.padding.left
 		place_siblings_horizontally(root^, valid_children[:], start_x, gap)
 	}
 	/* ========== END Position horizontally when horizontal is the main axis ============= */
@@ -1496,18 +1486,19 @@ position_boxes :: proc(root: ^Box) {
 	position_horizontally_across_start :: proc(root: ^Box) {
 		valid_children := non_floating_children(root)
 		for child in valid_children {
-			child.top_left.x = root.top_left.x + root.config.padding.left + child.config.margin.left
+			child.top_left.x     = root.top_left.x + root.config.padding.left + child.config.margin.left
 			child.bottom_right.x = child.top_left.x + child.width
 		}
 	}
 
 	position_horizontally_across_center :: proc(root: ^Box) {
-		valid_children := non_floating_children(root)
+		valid_children  := non_floating_children(root)
 		available_width := root.width - (root.config.padding.left + root.config.padding.right)
 		for child in valid_children {
-			child_total_width := child.width + box_get_margin_x_tot(child^)
-			half_width_diff := (available_width - child_total_width) / 2
-			child.top_left.x = root.top_left.x + half_width_diff + root.config.padding.left + child.config.margin.left
+			child_total_width   := child.width + box_get_margin_x_tot(child^)
+			half_width_diff     := (available_width - child_total_width) / 2
+			child.top_left.x     =
+				root.top_left.x + half_width_diff + root.config.padding.left + child.config.margin.left
 			child.bottom_right.x = child.top_left.x + child.width
 		}
 	}
@@ -1516,7 +1507,7 @@ position_boxes :: proc(root: ^Box) {
 		valid_children := non_floating_children(root)
 		for child in valid_children {
 			child.bottom_right.x = root.bottom_right.x - root.config.padding.right - child.config.margin.right
-			child.top_left.x = child.bottom_right.x - child.width
+			child.top_left.x     = child.bottom_right.x - child.width
 		}
 	}
 	/* ========== END Position horizontally when horizontal is the cross axis ============= */
@@ -1530,24 +1521,25 @@ position_boxes :: proc(root: ^Box) {
 			if prev_sibling == nil {
 				child.top_left.y = start_y + child.config.margin.top
 			} else {
-				child.top_left.y = prev_sibling.bottom_right.y + prev_sibling.config.margin.bottom + gap + child.config.margin.top
+				child.top_left.y =
+					prev_sibling.bottom_right.y + prev_sibling.config.margin.bottom + gap + child.config.margin.top
 			}
 			child.bottom_right.y = child.top_left.y + child.height
-			prev_sibling = child
+			prev_sibling         = child
 		}
 	}
 
 	position_vertically_start :: proc(root: ^Box) {
-		start_y := root.top_left.y + root.config.padding.top
-		gap := root.child_layout.gap_vertical
+		start_y  := root.top_left.y + root.config.padding.top
+		gap      := root.child_layout.gap_vertical
 		siblings := non_floating_children(root)
 		place_siblings_vertically(root^, siblings[:], start_y, gap)
 	}
 
 	// Probably don't account for padding here. Not sure yet, but for now we don't.
 	position_vertically_center :: proc(root: ^Box) {
-		gap := root.child_layout.gap_vertical
-		siblings := non_floating_children(root)
+		gap                   := root.child_layout.gap_vertical
+		siblings              := non_floating_children(root)
 		total_children_height := 0
 		for child in siblings {
 			total_children_height += child.height + box_get_margin_y_tot(child^)
@@ -1556,14 +1548,14 @@ position_boxes :: proc(root: ^Box) {
 			root.height -
 			((len(siblings) - 1) * gap + total_children_height + root.config.padding.top + root.config.padding.bottom)
 		half_height := available_height / 2
-		start_y := root.top_left.y + half_height + root.config.padding.top
+		start_y     := root.top_left.y + half_height + root.config.padding.top
 		place_siblings_vertically(root^, siblings[:], start_y, gap)
 	}
 
 	position_vertically_end :: proc(root: ^Box) {
-		gap := root.child_layout.gap_vertical
-		siblings := non_floating_children(root)
-		padding := root.config.padding.top + root.config.padding.bottom
+		gap                   := root.child_layout.gap_vertical
+		siblings              := non_floating_children(root)
+		padding               := root.config.padding.top + root.config.padding.bottom
 		total_children_height := 0
 		for child in siblings {
 			total_children_height += child.height + box_get_margin_y_tot(child^)
@@ -1572,21 +1564,21 @@ position_boxes :: proc(root: ^Box) {
 		place_siblings_vertically(root^, siblings[:], start_y, gap)
 	}
 
-	position_vertically_space_between :: proc(root: ^Box)  {
-		siblings := non_floating_children(root)
+	position_vertically_space_between :: proc(root: ^Box) {
+		siblings              := non_floating_children(root)
 		total_children_height := 0
 		for child in siblings {
 			total_children_height += child.height + box_get_margin_y_tot(child^)
 		}
 		// total_children_height += (len(siblings) - 1) * gap
 		remaining_height := root.height - total_children_height
-		gap := remaining_height / len(siblings)
-		start_y := root.top_left.y + root.config.padding.top
+		gap              := remaining_height / len(siblings)
+		start_y          := root.top_left.y + root.config.padding.top
 		place_siblings_vertically(root^, siblings[:], start_y, gap)
 	}
 
-	position_vertically_space_around :: proc(root: ^Box)  {
-		siblings := non_floating_children(root)
+	position_vertically_space_around :: proc(root: ^Box) {
+		siblings              := non_floating_children(root)
 		total_children_height := 0
 		for child in siblings {
 			total_children_height += child.height + box_get_margin_y_tot(child^)
@@ -1594,8 +1586,8 @@ position_boxes :: proc(root: ^Box) {
 		remaining_height := root.height - total_children_height
 		// Space between the start edge and first child, between each child and last
 		// child and end edge should all be equal.
-		n_gaps := len(siblings) + 1
-		gap := remaining_height / n_gaps
+		n_gaps  := len(siblings) + 1
+		gap     := remaining_height / n_gaps
 		start_y := root.top_left.y + gap
 		place_siblings_vertically(root^, siblings[:], start_y, gap)
 	}
@@ -1605,18 +1597,19 @@ position_boxes :: proc(root: ^Box) {
 	position_vertically_across_start :: proc(root: ^Box) {
 		valid_children := non_floating_children(root)
 		for child in valid_children {
-			child.top_left.y = root.top_left.y + root.config.padding.top + child.config.margin.top
+			child.top_left.y     = root.top_left.y + root.config.padding.top + child.config.margin.top
 			child.bottom_right.y = child.top_left.y + child.height
 		}
 	}
 
 	position_vertically_across_center :: proc(root: ^Box) {
-		valid_children := non_floating_children(root)
+		valid_children   := non_floating_children(root)
 		available_height := root.height - (root.config.padding.top + root.config.padding.bottom)
 		for child in valid_children {
-			child_total_height := child.height + box_get_margin_y_tot(child^)
-			half_height_diff := (available_height - child_total_height) / 2
-			child.top_left.y = root.top_left.y + root.config.padding.top + half_height_diff + child.config.margin.top
+			child_total_height  := child.height + box_get_margin_y_tot(child^)
+			half_height_diff    := (available_height - child_total_height) / 2
+			child.top_left.y     =
+				root.top_left.y + root.config.padding.top + half_height_diff + child.config.margin.top
 			child.bottom_right.y = child.top_left.y + child.height
 		}
 	}
@@ -1625,7 +1618,7 @@ position_boxes :: proc(root: ^Box) {
 		valid_children := non_floating_children(root)
 		for child in valid_children {
 			child.bottom_right.y = root.bottom_right.y - root.config.padding.bottom - child.config.margin.bottom
-			child.top_left.y = child.bottom_right.y - child.height
+			child.top_left.y     = child.bottom_right.y - child.height
 		}
 	}
 	/* ========== END Position vertically when vertical is the cross axis ============= */
@@ -1640,12 +1633,12 @@ position_boxes :: proc(root: ^Box) {
 		}
 
 		if root.id == "root" {
-			root.top_left = {0, 0}
+			root.top_left     = {0, 0}
 			root.bottom_right = {app.wx, app.wy}
 		}
 		for child, i in root.children {
 			// Absolutely positioned children won't have padding added when positioning.
-			if child.config.floating_type != .Not_Floating{
+			if child.config.floating_type != .Not_Floating {
 				position_absolute(root, child)
 			}
 		}
@@ -1663,7 +1656,7 @@ position_boxes :: proc(root: ^Box) {
 				panic("space around not implemented yet")
 			case .Space_Between:
 				position_horizontally_space_between(root)
-				// panic("space between not implemented yet")
+			// panic("space between not implemented yet")
 			}
 			// Across axis case:
 			switch root.child_layout.alignment_vertical {
@@ -1715,30 +1708,30 @@ position_boxes :: proc(root: ^Box) {
 }
 /* ============================ END LAYOUT CODE ============================== */
 
-box_get_siblings :: proc(box: Box, allocator:=context.allocator) -> [dynamic]^Box { 
+box_get_siblings :: proc(box: Box, allocator := context.allocator) -> [dynamic]^Box {
 	res := make([dynamic]^Box, allocator)
-	for child in box.parent.children { 
+	for child in box.parent.children {
 		append(&res, child)
 	}
 	return res
 }
 
 /* ============================ START ANIMATION CODE ============================== */
-// ** Decided to not implement animations yet, since not sure how needed they even are in my code base. 
+// ** Decided to not implement animations yet, since not sure how needed they even are in my code base.
 ANIMATION_MAX_ITEMS :: 64
 
-Animation_Item :: struct { 
-	id: 		string,
-	progress:	f64, 
-	time:		f64, 
-	initial:	f64, 
+Animation_Item :: struct {
+	id:       string,
+	progress: f64,
+	time:     f64,
+	initial:  f64,
 	// The last returned value from when animation_get was called.
-	prev:		f64,
+	prev:     f64,
 }
 
-animation_update_all :: proc(dt: f64) { 
-	for i := ui_state.animations_stored - 1; i >= 0; i -= 1 { 
-		animation := &ui_state.animations[i]
+animation_update_all :: proc(dt: f64) {
+	for i := ui_state.animations_stored - 1; i >= 0; i -= 1 {
+		animation         := &ui_state.animations[i]
 		animation.progress += dt / animation.time
 		// If animation is finished, remove it from list.
 		if animation.progress >= 1 {
@@ -1755,34 +1748,34 @@ animation_update_all :: proc(dt: f64) {
 	}
 }
 
-animation_start :: proc(id: string, initial, time: f64) { 
+animation_start :: proc(id: string, initial, time: f64) {
 	// Re-use existing animation entry if it's in the list.
 	for &animation in ui_state.animations[:ui_state.animations_stored] {
-		if animation.id == id { 
-			animation.initial = animation.prev	
-			animation.time = time
+		if animation.id == id {
+			animation.initial  = animation.prev
+			animation.time     = time
 			animation.progress = 0
 			return
 		}
 	}
 
 	// If not, push new entry if we have space.
-	if ui_state.animations_stored < N_MAX_ANIMATIONS { 
+	if ui_state.animations_stored < N_MAX_ANIMATIONS {
 		ui_state.animations[ui_state.animations_stored] = Animation_Item {
-			id = id,
-			initial = initial, 
-			prev = initial, 
-			time = time
+			id      = id,
+			initial = initial,
+			prev    = initial,
+			time    = time,
 		}
 		ui_state.animations_stored += 1
 	}
 }
 
 animation_get :: proc(id: string, target: f64) -> f64 {
-	for &animation in ui_state.animations[:ui_state.animations_stored] { 
-		if animation.id == id { 
-			prog := animation.progress
-			prog = 1 - (1 - prog) * (1 - prog) // apply easing
+	for &animation in ui_state.animations[:ui_state.animations_stored] {
+		if animation.id == id {
+			prog          := animation.progress
+			prog           = 1 - (1 - prog) * (1 - prog) // apply easing
 			animation.prev = animation.initial + prog * (target - animation.initial)
 			return animation.prev
 		}
@@ -1792,16 +1785,14 @@ animation_get :: proc(id: string, target: f64) -> f64 {
 	return target
 }
 
-animation_is_running :: proc(id: string) -> bool { 
-	for animation in ui_state.animations[0:ui_state.animations_stored] { 
+animation_is_running :: proc(id: string) -> bool {
+	for animation in ui_state.animations[0:ui_state.animations_stored] {
 		if animation.id == id do return true
 	}
 	return false
 }
 
 /* ============================ END ANIMATION CODE ============================== */
-
-
 
 
 /* ============================ START PLATFORM LAYER CODE ============================== */

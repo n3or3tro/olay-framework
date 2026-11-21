@@ -15,11 +15,11 @@
     "enable_procedure_context": true,
     "enable_checker_workspace_diagnostics": true,
     "enable_comp_lit_signature_help_use_docs": true,
-    "checker_args": "-ignore-warnings",
+    "checker_args": "-ignore-warnings -ignore-unknown-attributes",
     "profiles": [
         {
             "os": "windows",
-            "checker_path": ["src"],
+            "checker_path": ["src/olay", "util"],
             "name": "default",
             "defines": {
                 "mem_profile":"true",

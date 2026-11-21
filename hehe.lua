@@ -12,3 +12,19 @@
 ---@field val_dyn_arr	string[]
 ---@field val_struct	Internal_Struct
 
+---@param a integer
+---@param b string
+---@param c integer[]
+---@return number
+function func_a(a, b, c) end
+
+---@param a string
+---@param b string
+---@return integer
+function func_b(a, b) end
+
+---@param a table<string, integer>
+---@param b table<userdata, string>
+---@return table<string, number>
+function func_c(a, b) end
+

@@ -1,5 +1,4 @@
 package olay
-// import sarr "core:container/small_array"
 import "core:encoding/json"
 import "core:fmt"
 import "core:mem"
@@ -8,6 +7,8 @@ import "core:os"
 import "core:reflect"
 import "core:strconv"
 import str "core:strings"
+import "core:text/edit"
+import "core:text/regex/common"
 import "core:time"
 import gl "vendor:OpenGL"
 import lua "vendor:lua/5.1"
@@ -115,53 +116,6 @@ Drop_Data :: union {
 	string,
 	int,
 	f32,
-}
-
-State_Change_Type :: enum {
-	Track_Step,
-	Track_Volume,
-	Track_Arm_State,
-	// Old / new values will be the file path or maybe an index into locally loaded sounds.
-	Track_Sound,
-}
-
-Track_Step_Change :: struct {
-	type:      enum {
-		Pitch,
-		Volume,
-		Chop,
-		Send2,
-	},
-	track:     int,
-	step:      int,
-	old_value: int,
-	new_value: int,
-}
-
-Track_Volume_Change :: struct {
-	track, step: int,
-	old_volume:  int,
-	new_value:   int,
-}
-
-Track_Arm_State_Change :: struct {
-	track, step: int,
-	old_value:   bool,
-	new_value:   bool,
-}
-
-Track_Sound_Change :: struct {
-	track, step: int,
-	old_value:   string,
-	new_value:   string,
-}
-
-
-State_Change :: union {
-	Track_Step_Change,
-	Track_Volume_Change,
-	Track_Arm_State_Change,
-	Track_Sound_Change,
 }
 
 init_ui_state :: proc() -> ^UI_State {
@@ -304,6 +258,157 @@ example_ui :: proc() {
 	)
 }
 
+email_data: string
+username: string
+password1: string
+password2: string
+/*
+Tries to display every possible widget that is inbuilt into the UI.
+*/
+test_ui :: proc() {
+	menu_picker: {
+		btn_height: f32 = 30
+		child_container(
+			{
+				size = {{.Fixed, f32(app.wx)}, {.Fixed, f32(btn_height)}},
+			},
+			{},
+		)
+		text_button(
+			"1",
+			{
+				size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, btn_height}},
+				text_color = .Slate_600,
+			},
+		)
+		text_button(
+			"2",
+			{
+				size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, btn_height}},
+				text_color = .Slate_600,
+			},
+		)
+		text_button(
+			"3",
+			{
+				size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, btn_height}},
+				text_color = .Slate_600,
+			},
+		)
+		text_button(
+			"4",
+			{
+				size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, btn_height}},
+				text_color = .Slate_600,
+			},
+		)
+		text_button(
+			"5",
+			{
+				size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, btn_height}},
+				text_color = .Slate_600,
+			},
+		)
+		text_button(
+			"6",
+			{
+				size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, btn_height}},
+				text_color = .Slate_600,
+			},
+		)
+	}
+	form: {
+		text(
+			"my form",
+			{
+				size      = Size_Fit_Text,
+				font_size = 25,
+				color     = .Red_700,
+			},
+		)
+		child_container(
+			{
+				size    = {{.Fixed, 500}, {.Fixed, 800}},
+				color   = .Primary_Container,
+				padding = {top = 10, bottom = 10, left = 30, right = 30},
+			},
+			{
+				gap_vertical         = 10,
+				direction            = .Vertical,
+				alignment_horizontal = .Center,
+			},
+			box_flags = {.Draw},
+		)
+		text("Email: ", {size = Size_Fit_Text, color = .Slate_600})
+		edit_text_box(
+			{
+				size       = {{.Percent, 1}, {.Fixed, 40}},
+				text_color = .Slate_950,
+			},
+			.Generic_One_Line,
+			&email_data,
+		)
+
+		text("Username: ", {size = Size_Fit_Text, color = .Slate_600})
+		edit_text_box(
+			{
+				size       = {{.Percent, 1}, {.Fixed, 40}},
+				text_color = .Slate_950,
+			},
+			.Generic_One_Line,
+			&username,
+		)
+
+		text("Password: ", {size = Size_Fit_Text, color = .Slate_600})
+		edit_text_box(
+			{
+				size       = {{.Percent, 1}, {.Fixed, 40}},
+				text_color = .Slate_950,
+			},
+			.Generic_One_Line,
+			&password1,
+		)
+
+		text("Re-enter Password: ", {size = Size_Fit_Text, color = .Slate_600})
+		edit_text_box(
+			{
+				size       = {{.Percent, 1}, {.Fixed, 40}},
+				text_color = .Slate_950,
+			},
+			.Generic_One_Line,
+			&password2,
+		)
+
+		box_from_cache({}, {size = Size_Grow})
+		submit_btn := text_button(
+			"Submit",
+			{
+				size       = {{.Percent, 0.5}, {.Fixed, 70}},
+				color      = .Green_600,
+				text_color = .Slate_100,
+			},
+		)
+		if submit_btn.clicked {
+			valid, error := validate_data()
+			if !valid {
+
+			}
+		}
+
+		validate_data :: proc() -> (bool, string) {
+			if password1 != password2 {
+				return false, "Password's don't match"
+			}
+			if username == "shiet" {
+				return false, "Username already in use"
+			}
+			return true, ""
+		}
+	}
+	calender()
+}
+
+some_text_data: string
 create_ui :: proc() -> ^Box {
 	// Collect frame signals for this frame based on what the tree just looked like at the end of the prev frame.
 	if ui_state.frame_num > 1 {
@@ -331,22 +436,23 @@ create_ui :: proc() -> ^Box {
 	).box
 	ui_state.root = root
 
-	if app.lua_ui_chunk != lua.NOREF {
-		stack_depth_before := len(ui_state.parents_stack)
-		lua.rawgeti(app.lua, lua.REGISTRYINDEX, lua.Integer(app.lua_ui_chunk))
-		if lua.pcall(app.lua, 0, 0, 0) != 0 {
-			printfln("Lua runtime error: {}", string(lua.tostring(app.lua, -1)))
-			lua.pop(app.lua, 1)
-			// Close any containers that Lua opened but didn't close due to the error.
-			for len(ui_state.parents_stack) > stack_depth_before {
-				box        := ui_state.parents_stack[len(ui_state.parents_stack) - 1]
-				signals: Box_Signals
-				signals.box = box
-				box_regular_close_children(signals)
-			}
-		}
-	}
-	// example_ui()
+	// if app.lua_ui_chunk != lua.NOREF {
+	// 	stack_depth_before := len(ui_state.parents_stack)
+	// 	lua.rawgeti(app.lua, lua.REGISTRYINDEX, lua.Integer(app.lua_ui_chunk))
+	// 	if lua.pcall(app.lua, 0, 0, 0) != 0 {
+	// 		printfln("Lua runtime error: {}", string(lua.tostring(app.lua, -1)))
+	// 		lua.pop(app.lua, 1)
+	// 		// Close any containers that Lua opened but didn't close due to the error.
+	// 		// In production this probably shouldn't be neccessary.
+	// 		for len(ui_state.parents_stack) > stack_depth_before {
+	// 			box        := ui_state.parents_stack[len(ui_state.parents_stack) - 1]
+	// 			signals: Box_Signals
+	// 			signals.box = box
+	// 			box_regular_close_children(signals)
+	// 		}
+	// 	}
+	// }
+	test_ui()
 	if ui_state.dragged_box != nil {
 		dragged_box := ui_state.dragged_box.(^Box)
 		if .Drag_Drop_Source in dragged_box.flags {

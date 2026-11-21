@@ -1,53 +1,132 @@
 @echo off
-setlocal EnableDelayedExpansion
-cd /d "%~dp0\.."
+setlocal enabledelayedexpansion
 
-set OPTIMIZED=0
-set MEM_PROFILE=0
-set PERF_PROFILE=0
-set DEBUG=0
-set SANITIZE=0
+REM Configuration
+set "BUILD_DIR=%~dp0"
+set "PROJECT_DIR=%BUILD_DIR%.."
+set "CONFIG=debug"
+set "BUILD_MODE=full"
+set "SHOULD_CLEAN=0"
+set "SHOULD_RUN=0"
+set "VERBOSE=0"
 
+REM Parse arguments
 :parse_args
-if "%~1"=="" goto done_args
-if /i "%~1"=="/optimized"    set OPTIMIZED=1
-if /i "%~1"=="/mem_profile"  set MEM_PROFILE=1
-if /i "%~1"=="/perf_profile" set PERF_PROFILE=1
-if /i "%~1"=="/debug"        set DEBUG=1
-if /i "%~1"=="/sanitize"     set SANITIZE=1
-shift
-goto parse_args
-:done_args
+if "%~1"=="" goto args_done
+if /i "%~1"=="-debug" (
+    set "CONFIG=debug"
+    shift
+    goto parse_args
+)
+if /i "%~1"=="-release" (
+    set "CONFIG=release"
+    shift
+    goto parse_args
+)
+if /i "%~1"=="-dll-only" (
+    set "BUILD_MODE=dll"
+    shift
+    goto parse_args
+)
+if /i "%~1"=="-full" (
+    set "BUILD_MODE=full"
+    shift
+    goto parse_args
+)
+if /i "%~1"=="-clean" (
+    set "SHOULD_CLEAN=1"
+    shift
+    goto parse_args
+)
+if /i "%~1"=="-run" (
+    set "SHOULD_RUN=1"
+    shift
+    goto parse_args
+)
+if /i "%~1"=="-verbose" (
+    set "VERBOSE=1"
+    shift
+    goto parse_args
+)
+if /i "%~1"=="-help" (
+    goto show_help
+)
+echo Unknown option: %~1
+goto show_help
 
-set DLL_FLAGS=-build-mode:dll -ignore-warnings
-set EXE_FLAGS=-define:hot_reload=true -define:release=false -ignore-warnings
-
-if %DEBUG%==1 (
-    set DLL_FLAGS=!DLL_FLAGS! -debug
-    set EXE_FLAGS=!EXE_FLAGS! -debug
+:args_done
+if !SHOULD_CLEAN! equ 1 (
+    echo Cleaning build directory...
+    if exist "!BUILD_DIR!app.exe" del "!BUILD_DIR!app.exe"
+    if exist "!BUILD_DIR!app.dll" del "!BUILD_DIR!app.dll"
 )
 
-if %OPTIMIZED%==1 (
-    set DLL_FLAGS=!DLL_FLAGS! -o:speed
-    set EXE_FLAGS=!EXE_FLAGS! -o:speed
+echo.
+echo Build Configuration:
+echo   Config: !CONFIG!
+echo   Mode: !BUILD_MODE!
+echo.
+
+cd /d "!PROJECT_DIR!"
+
+set "ODIN_FLAGS=-ignore-warnings"
+set "ODIN_FLAGS=!ODIN_FLAGS! -custom-attribute:lua_data"
+set "ODIN_FLAGS=!ODIN_FLAGS! -custom-attribute:lua_global"
+set "ODIN_FLAGS=!ODIN_FLAGS! -custom-attribute:lua_proc"
+set "ODIN_FLAGS=!ODIN_FLAGS! -custom-attribute:lua_struct"
+
+if "!CONFIG!"=="release" (
+    set "ODIN_FLAGS=!ODIN_FLAGS! -o:speed"
+) else (
+    set "ODIN_FLAGS=!ODIN_FLAGS! -debug"
 )
 
-if %MEM_PROFILE%==1 (
-    set DLL_FLAGS=!DLL_FLAGS! -define:mem_profile=true
+if !VERBOSE! equ 1 (
+    set "ODIN_FLAGS=!ODIN_FLAGS! -verbose"
 )
 
-if %PERF_PROFILE%==1 (
-    set DLL_FLAGS=!DLL_FLAGS! -define:perf_profile=true
+if "!BUILD_MODE!"=="full" (
+    echo Building app.exe...
+    odin build src -out:!BUILD_DIR!app.exe !ODIN_FLAGS!
+    if errorlevel 1 goto build_failed
 )
 
-if %SANITIZE%==1 (
-    set DLL_FLAGS=!DLL_FLAGS! -sanitize:address
-    set EXE_FLAGS=!EXE_FLAGS! -sanitize:address -linker:radlink
+echo Building app.dll...
+odin build src/olay -build-mode:dll -out:!BUILD_DIR!app.dll !ODIN_FLAGS!
+if errorlevel 1 goto build_failed
+
+echo.
+echo Build successful!
+if !SHOULD_RUN! equ 1 (
+    echo.
+    echo Running app.exe...
+    "!BUILD_DIR!app.exe"
 )
+goto end
 
-echo [dll] odin build src/olay %DLL_FLAGS% -out:build/app.dll
-odin build src/olay %DLL_FLAGS% -out:build/app.dll
-if %ERRORLEVEL% neq 0 exit /b %ERRORLEVEL%
+:build_failed
+echo.
+echo Build failed!
+exit /b 1
 
-echo [exe] odin build src %EXE_FLAGS% -debug -out:build/app-reloadable.exe
-odin build src %EXE_FLAGS% -out:build/app-reloadable.exe
+:show_help
+echo Usage: build.bat [options]
+echo.
+echo Options:
+echo   -debug           Build with debug info (default)
+echo   -release         Build optimized for release
+echo   -dll-only        Build only app.dll (faster iteration)
+echo   -full            Build app.exe and app.dll (default)
+echo   -clean           Clean build output before building
+echo   -run             Run app.exe after successful build
+echo   -verbose         Show verbose build output
+echo   -help            Show this message
+echo.
+echo Examples:
+echo   build.bat -debug -dll-only
+echo   build.bat -release -full -run
+echo   build.bat -clean
+exit /b 0
+
+:end
+endlocal

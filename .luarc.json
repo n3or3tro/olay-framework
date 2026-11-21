@@ -1,0 +1,7 @@
+{
+    "workspace.library": ["ui"],
+    "runtime.version": "LuaJIT",
+    "diagnostics.globals": [
+        "knob_value"
+    ]
+}

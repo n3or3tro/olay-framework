@@ -133,3 +133,42 @@ Found bug in `sizing_calc_percent_width` and `sizing_calc_percent_height` at [co
 - Full layout pipeline integration (complete size_boxes -> position_boxes flow)
 - Text wrapping and text sizing
 - Signal handling (clicks, hover, drag, etc.)
+
+## Lua Binding Test Structure
+
+- `src/olay/tests/lua_bindings/lua_bindings_tests.odin` is the runtime test suite for generated Lua bindings.
+- `src/olay/tests/lua_bindings/main.odin` is the dedicated runner for the Lua binding suite.
+- `src/olay/tests/lua_fixture/fixture.odin` holds the annotated fixture types, globals, and procs used by those tests.
+- `src/olay/tests/lua_fixture/runtime.odin` provides the minimal runtime context expected by generated glue.
+- `src/olay/tests/lua_fixture/lua_ffi_stuff.odin` and `src/olay/tests/lua_fixture/odin_data_definitions.lua` are generated artifacts for that fixture package.
+- `src/olay/tests/lua_fixture/register.odin` registers generated fixture procs before globals are wrapped, so proc tests do not get blocked by the `_G` metatable.
+
+### Refreshing Generated Lua Fixture Bindings
+
+- Run `.\util\regenerate-lua-fixture-bindings.ps1`
+- The script deletes the old generated outputs first, because the current generator scans every regular file in the target directory.
+
+### Running Lua Binding Tests
+
+- Run `.\util\run-lua-binding-tests.ps1`
+- Or use `.\build\test-lua-bindings.bat`
+- You can pass optional name filters, for example `.\util\run-lua-binding-tests.ps1 proc_add`
+- By default the runner skips `test_struct_nested` and `test_struct_deep_nest`, which currently expose a known nested-struct binding issue without changing the generator implementation.
+- Use `.\util\run-lua-binding-tests.ps1 -include-known-failures test_struct_nested` to reproduce one of those known failures directly.
+
+### Compiling The Lua Binding Runner
+
+- Use `odin build src/olay/tests/lua_bindings -ignore-warnings -ignore-unknown-attributes -out:lua_binding_tests.exe`
+- `ols.json` already uses `-ignore-unknown-attributes`, so this matches the workspace checker configuration.
+
+## Generator Unit Tests
+
+- `src/olay/tests/generator_unit/generator_unit_tests.odin` exercises generator helpers directly by parsing small Odin snippets and checking the collected metadata or emitted code.
+- `src/olay/tests/generator_unit/main.odin` is the dedicated runner for the generator unit suite.
+- The unit suite covers type classification, AST collection, Lua doc emission, bridge code emission, nested metatable registration order, globals accessors, and a small `generate()` integration case.
+
+### Running Generator Unit Tests
+
+- Run `.\util\run-generator-unit-tests.ps1`
+- Or use `.\build\test-generator-unit.bat`
+- You can pass optional name filters, for example `.\util\run-generator-unit-tests.ps1 classify_type`

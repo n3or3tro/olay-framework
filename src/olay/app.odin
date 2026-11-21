@@ -17,6 +17,7 @@ Mode :: enum {
 
 PERF_PROFILE :: #config(perf_profile, false)
 MEM_PROFILE :: #config(mem_profile, false)
+LUA_GENERATE :: #config(lua_generate, false)
 
 print :: fmt.print
 println :: fmt.println
@@ -57,6 +58,7 @@ App :: struct {
 	lua_ui_chunk:               i32,
 	lua_odin_context:           runtime.Context,
 	last_write_time_app_source: i64,
+	knob_value:                 int,
 }
 
 Window :: sdl.Window
@@ -177,7 +179,7 @@ app_update :: proc() -> (all_good: bool) {
 
 	end := time.now()._nsec
 	total_frame_time_ns := f64(end - start)
-	printfln("app_update() took {} ms", total_frame_time_ns / 1_000_000)
+	// printfln("app_update() took {} ms", total_frame_time_ns / 1_000_000)
 
 	// if time_to_wait > 0 {
 	// 	time.accurate_sleep(time_to_wait)
@@ -324,7 +326,6 @@ app_hot_reload :: proc(mem: rawptr) {
 		resubclass_wndproc()
 	}
 }
-
 @(export)
 app_reload_colors :: proc(mem: rawptr, color_file_path: string) {
 	app = (^App)(mem)
