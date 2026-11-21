@@ -1,15 +1,16 @@
 package olay
-import ft "../third-party/freetype"
 import "base:intrinsics"
-import hm "core:container/handle_map"
+import "core:sync"
 import "core:math"
 import "core:sort"
+import str "core:strings"
 import "core:time"
 import "core:unicode/utf8"
+import gl "vendor:OpenGL"
+import ma "vendor:miniaudio"
+import "core:simd"
+import ft "../third-party/freetype"
 
-Handle :: hm.Handle64
-Texture_Handle :: distinct Handle
-Render_Target_Handle :: distinct Handle
 
 PI :: math.PI
 
@@ -34,18 +35,18 @@ UI_Element_Type :: enum {
 // These must appear in the same order as they do in the shader. A bit annoying but eh
 // the alternative is to give an explicit integer value to each variant, but even those
 // must be synced with the value you give them in the shader.
-UI_Render_Flag :: enum u32 {
-	Regular,
-	Font,
-	Waveform_Data,
-	Circle,
-	Circle_Knob,
+UI_Render_Flag :: enum u32 { 
+	Regular, 	
+	Font, 		
+	Waveform_Data, 
+	Circle, 		
+	Circle_Knob, 	
 	Audio_Spectrum,
 	Frosted_Glass,
-	Glow,
+	Glow, 
 	Knob_Indicator,
 	Frequency_Response,
-	Background = 15,
+	Background = 15,  	
 }
 
 Rect_Render_Data :: struct {
@@ -60,7 +61,7 @@ Rect_Render_Data :: struct {
 	corner_radius:        f32,
 	edge_softness:        f32,
 	border_thickness:     f32,
-	ui_flags:             bit_set[UI_Render_Flag;u32],
+	ui_flags:             bit_set[UI_Render_Flag; u32],
 	font_size:            Font_Size,
 	clip_tl:              Vec2_f32,
 	clip_br:              Vec2_f32,
@@ -127,19 +128,19 @@ get_boxes_rendering_data :: proc(box: Box, allocator := context.allocator) -> Bo
 		// A bit of trig to work shit out for the line. Since top_left and bottom_right,
 		// form a rectangle, we can cut it in half to get 2 equal triangles and use
 		// basic trig to work out the rotation angle to pass to the GPU.
-		start  := box.config.line_start
-		end    := box.config.line_end
+		start := box.config.line_start
+		end := box.config.line_end
 		center := (start + end) * 0.5
 		// Classic pythagoras.
-		length    := distance(start, end)
-		angle     := math.atan2(end.y - start.y, end.x - start.x)
+		length := distance(start, end)
+		angle := math.atan2(end.y - start.y, end.x - start.x)
 		thickness := f32(box.config.line_thickness)
 
 		// In the rest of our UI: box.tl < box.br is always true. This doesn't hold for
 		// lines where start < end isn't always true. Thus we must construct a valid quad
 		// for our line from scratch based on the other things we know about the line.
-		half_size    := Vec2_f32{length / 2, thickness / 2}
-		top_left     := center - half_size
+		half_size := Vec2_f32{length / 2, thickness / 2}
+		top_left := center - half_size
 		bottom_right := center + half_size
 
 		line_render_data: Rect_Render_Data = {
@@ -171,10 +172,10 @@ get_boxes_rendering_data :: proc(box: Box, allocator := context.allocator) -> Bo
 		corner_radius    = f32(box.config.corner_radius),
 		edge_softness    = f32(box.config.edge_softness),
 		border_thickness = 100000,
-		clip_tl          = vec2_f32(box.clip_tl),
-		clip_br          = vec2_f32(box.clip_br),
+		clip_tl 		 = vec2_f32(box.clip_tl),
+		clip_br			 = vec2_f32(box.clip_br)
 	}
-	if .Glow in box.flags do box_render_data.ui_flags += {.Glow}
+	if .Glow in box.flags    do box_render_data.ui_flags += {.Glow}
 	if .Frosted in box.flags do box_render_data.ui_flags += {.Frosted_Glass}
 
 	if box.parent != nil && box.parent.config.overflow_y != .Visible {
@@ -205,13 +206,13 @@ get_boxes_rendering_data :: proc(box: Box, allocator := context.allocator) -> Bo
 
 	if .Drop_Shadow in box.flags {
 		// Create drop shadow for depth
-		shadow_color := Vec4_f32{0, 0, 0, 0.5}
+		shadow_color := Vec4_f32{0,0,0,0.5}
 		// shadow_color := Vec4_f32{0.8, 0.1, 0.5, 1}
 		shadow := Rect_Render_Data {
 			top_left         = box_coord_to_vec2f32(box.top_left) + {0, 3}, // Offset for shadow
 			bottom_right     = box_coord_to_vec2f32(box.bottom_right) + {7, 7},
 
-			// vec3 col_bl = vec3(0.8, 0.1, 0.5);    // Bottom-Right: Pink/Magenta
+		// vec3 col_bl = vec3(0.8, 0.1, 0.5);    // Bottom-Right: Pink/Magenta
 			tl_color         = shadow_color,
 			tr_color         = shadow_color,
 			bl_color         = shadow_color,
@@ -252,7 +253,7 @@ get_boxes_rendering_data :: proc(box: Box, allocator := context.allocator) -> Bo
 				border_thickness = 10000,
 			}
 			result.outer_shadow = shadow
-			result.overlay      = glass_overlay
+			result.overlay = glass_overlay
 		} else if .Active_Animation in box.flags && box.signals.pressed {
 			glass_overlay := Rect_Render_Data {
 				top_left         = box_coord_to_vec2f32(box.top_left),
@@ -302,20 +303,19 @@ get_boxes_rendering_data :: proc(box: Box, allocator := context.allocator) -> Bo
 		// when we include various types of text positioning, right now all text is centered by default.
 		calc_cursor_pos :: proc(box: Box, text: string) -> int {
 			editor_state := ui_state.text_editors_state[box.id]
-			cursor_pos   := min(editor_state.selection[0], len(text))
-			substr_len   := font_get_strings_rendered_len(text[0:cursor_pos], box.config.font_size)
+			cursor_pos := min(editor_state.selection[0], len(text))
+			substr_len := font_get_strings_rendered_len(text[0:cursor_pos], box.config.font_size)
 			// Calculate offset gap between left edge of box and start of rendered text.
 			half_gap := (box.width - font_get_strings_rendered_len(text, box.config.font_size)) / 2
 			return box.top_left.x + half_gap + substr_len
 		}
 		// Add cursor inside text box. Blinking is kinda jank right now.
 		if .Edit_Text in box.flags &&
-		should_render_text_cursor()             &&
-		ui_state.last_active_box != nil          &&
-		ui_state.last_active_box.id == box.id
-		{
+		   should_render_text_cursor() &&
+		   ui_state.last_active_box != nil &&
+		   ui_state.last_active_box.id == box.id {
 			// box_data_string := box_data_as_string(box.data, context.temp_allocator)
-			color        := Color_RGBA{0, 0.5, 1, 1}
+			color := Color_RGBA{0, 0.5, 1, 1}
 			cursor_x_pos := f32(calc_cursor_pos(box, box.text))
 			cursor_data := Rect_Render_Data {
 				top_left         = {cursor_x_pos, f32(box.top_left.y)},
@@ -337,44 +337,40 @@ get_boxes_rendering_data :: proc(box: Box, allocator := context.allocator) -> Bo
 		color := ui_state.dark_theme[box.config.border_color]
 
 		if box.config.border.left > 0 {
-			left_border                 := Rect_Render_Data{}
-			left_border.top_left         = vec2_f32(box.top_left)
-			left_border.bottom_right     = {
-				left_border.top_left.x + f32(box.config.border.left),
-				f32(box.bottom_right.y),
-			}
-			left_border.tl_color         = color
-			left_border.tr_color         = color
-			left_border.bl_color         = color
-			left_border.br_color         = color
+			left_border := Rect_Render_Data{}
+			left_border.top_left = vec2_f32(box.top_left)
+			left_border.bottom_right = {left_border.top_left.x + f32(box.config.border.left), f32(box.bottom_right.y)}
+			left_border.tl_color = color
+			left_border.tr_color = color
+			left_border.bl_color = color
+			left_border.br_color = color
 			left_border.border_thickness = 100
-			left_border.clip_tl          = box_render_data.clip_tl
-			left_border.clip_br          = box_render_data.clip_br
+			left_border.clip_tl = box_render_data.clip_tl
+			left_border.clip_br = box_render_data.clip_br
 			append(&result.additional_data, left_border)
 		}
 		if box.config.border.right > 0 {
-			right_border                 := Rect_Render_Data{}
-			right_border.top_left         = vec2_f32(
-				[2]int{box.bottom_right.x - box.config.border.right, box.top_left.y},
-			)
-			right_border.bottom_right     = vec2_f32(box.bottom_right)
-			right_border.tl_color         = color
-			right_border.tr_color         = color
-			right_border.bl_color         = color
-			right_border.br_color         = color
+			right_border := Rect_Render_Data{}
+			right_border.top_left     = vec2_f32([2]int{box.bottom_right.x - box.config.border.right, box.top_left.y})
+			right_border.bottom_right = vec2_f32(box.bottom_right )
+			right_border.tl_color = color
+			right_border.tr_color = color
+			right_border.bl_color = color
+			right_border.br_color = color
 			right_border.border_thickness = 100
-			right_border.clip_tl          = box_render_data.clip_tl
-			right_border.clip_br          = box_render_data.clip_br
+			// right_border.border_thickness = 1
+			right_border.clip_tl = box_render_data.clip_tl
+			right_border.clip_br = box_render_data.clip_br
 			append(&result.additional_data, right_border)
 		}
 		if box.config.border.top > 0 {
-			top_border                 := Rect_Render_Data{}
-			top_border.top_left         = vec2_f32(box.top_left)
-			top_border.bottom_right     = top_border.top_left + vec2_f32([2]int{box.width, box.config.border.top})
-			top_border.tl_color         = color
-			top_border.tr_color         = color
-			top_border.bl_color         = color
-			top_border.br_color         = color
+			top_border := Rect_Render_Data{}
+			top_border.top_left = vec2_f32(box.top_left)
+			top_border.bottom_right = top_border.top_left + vec2_f32([2]int{box.width, box.config.border.top})
+			top_border.tl_color = color
+			top_border.tr_color = color
+			top_border.bl_color = color
+			top_border.br_color = color
 			top_border.border_thickness = 100
 			// top_border.edge_softness =
 			top_border.clip_tl = box_render_data.clip_tl
@@ -382,46 +378,42 @@ get_boxes_rendering_data :: proc(box: Box, allocator := context.allocator) -> Bo
 			append(&result.additional_data, top_border)
 		}
 		if box.config.border.bottom > 0 {
-			bottom_border                 := Rect_Render_Data{}
-			bottom_border.top_left         = vec2_f32(
-				[2]int{box.top_left.x, box.bottom_right.y - box.config.border.bottom},
-			)
-			bottom_border.bottom_right     = vec2_f32(box.bottom_right)
-			bottom_border.tl_color         = color
-			bottom_border.tr_color         = color
-			bottom_border.bl_color         = color
-			bottom_border.br_color         = color
+			bottom_border := Rect_Render_Data{}
+			bottom_border.top_left = vec2_f32([2]int{box.top_left.x, box.bottom_right.y - box.config.border.bottom})
+			bottom_border.bottom_right = vec2_f32(box.bottom_right)
+			bottom_border.tl_color = color
+			bottom_border.tr_color = color
+			bottom_border.bl_color = color
+			bottom_border.br_color = color
 			bottom_border.border_thickness = 100
-			bottom_border.clip_tl          = box_render_data.clip_tl
-			bottom_border.clip_br          = box_render_data.clip_br
+			bottom_border.clip_tl = box_render_data.clip_tl
+			bottom_border.clip_br = box_render_data.clip_br
 			append(&result.additional_data, bottom_border)
 		}
 
 	}
 
-	if metadata, ok := box.metadata.(Metadata_Knob); ok {
+	if metadata, ok := box.metadata.(Metadata_Knob); ok { 
 		if .Knob_Ring in box.flags {
-			normalized_value := map_range(metadata.min, metadata.max, 0, 1, metadata.val)
+			normalized_value := map_range(metadata.min, metadata.max, 0, 1, metadata.val) 
 			if metadata.logarithmic && metadata.min > 0 {
-				normalized_value = f32(
-					math.ln(f64(metadata.val) / f64(metadata.min)) / math.ln(f64(metadata.max) / f64(metadata.min)),
-				)
+				normalized_value = f32(math.ln(f64(metadata.val) / f64(metadata.min)) / math.ln(f64(metadata.max) / f64(metadata.min)))
 			}
-			data      := box_render_data
+			data := box_render_data
 			gap: f32 = 2
 			thickness: f32 = 5
 			extension := gap * thickness
 			arc_meta_data := Rect_Render_Data {
-				bl_color         = data.bl_color,
-				br_color         = data.br_color,
-				tl_color         = data.tl_color,
-				tr_color         = data.tr_color,
-				top_left         = data.top_left - {extension, extension},
-				bottom_right     = data.bottom_right + {extension, extension},
+				bl_color 	 = data.bl_color,
+				br_color 	 = data.br_color,
+				tl_color 	 = data.tl_color,
+				tr_color 	 = data.tr_color,
+				top_left 	 = data.top_left - {extension, extension},
+				bottom_right = data.bottom_right + {extension, extension},
 				// Co-opted by knob ring to indicate the thickness of the ring.
 				border_thickness = thickness,
-				ui_flags         = {.Knob_Indicator},
-				texture_top_left = {normalized_value, 0},
+				ui_flags = {.Knob_Indicator},
+				texture_top_left = {normalized_value, 0}
 			}
 			append(&result.additional_data, arc_meta_data)
 		}
@@ -434,13 +426,10 @@ get_boxes_rendering_data :: proc(box: Box, allocator := context.allocator) -> Bo
 	return result
 }
 
-collect_render_data_from_ui_tree :: proc(
-	root: ^Box,
-	render_data_allocator := context.allocator,
-) -> [dynamic]Rect_Render_Data {
+collect_render_data_from_ui_tree :: proc(render_data: ^[dynamic]Rect_Render_Data) {
 	arena, scratch := arena_allocator_new("collect-render-data-box-tree-to-list")
 	defer arena_allocator_destroy(arena, scratch)
-	box_list := box_tree_to_list_complex(root, scratch)
+	box_list := box_tree_to_list_complex(ui_state.root, scratch)
 	// Must use a stable sort.
 	sort.merge_sort_proc(box_list[:], proc(a, b: ^Box) -> int {
 		if a.z_index < b.z_index {
@@ -452,63 +441,61 @@ collect_render_data_from_ui_tree :: proc(
 		}
 	})
 
-	render_data := make([dynamic]Rect_Render_Data, render_data_allocator)
 	for box in box_list {
 		boxes_render_data := get_boxes_rendering_data(box^, scratch)
 		if shadow, ok := boxes_render_data.outer_shadow.(Rect_Render_Data); ok {
-			append(&render_data, shadow)
+			append(render_data, shadow)
 		}
 
 		// Some boxes may not need to be rendered themselves, but their related data to that box may need to be rendered.
 		// Hence the conditional.
 		if box_data, ok := boxes_render_data.box.(Rect_Render_Data); ok {
-			append(&render_data, box_data)
+			append(render_data, box_data)
 		}
 
 		for data in boxes_render_data.additional_data {
-			append(&render_data, data)
+			append(render_data, data)
 		}
 
 
 		if inner_shadow, ok := boxes_render_data.inner_shadow.(Rect_Render_Data); ok {
-			append(&render_data, inner_shadow)
+			append(render_data, inner_shadow)
 		}
 
 		draw_text: if .Draw_Text in box.flags {
-			text              := utf8.string_to_runes(box.text, scratch)
-			shaped_glyphs     := font_segment_and_shape_text(&ui_state.font_state.kb.font, text)
+			text := utf8.string_to_runes(box.text, scratch)
+			shaped_glyphs := font_segment_and_shape_text(&ui_state.font_state.kb.font, text)
 			glyph_render_info := font_get_render_info(shaped_glyphs[:], box.config.font_size, nil, nil, scratch)
-			glyph_rects       := get_text_quads(box^, glyph_render_info[:], scratch)
+			glyph_rects := get_text_quads(box^, glyph_render_info[:], scratch)
 			for rect in glyph_rects {
-				append(&render_data, rect)
+				append(render_data, rect)
 			}
 		}
 
-		draw_icon: if .Draw_Icon in box.flags {
+		draw_icon: if .Draw_Icon in box.flags { 
 			glyph_index := ft.get_char_index(ui_state.icon_state.freetype.face, u32(box.icon_rune))
-			buf         := [1]Glyph{Glyph{glyph = {Id = u16(glyph_index)}, pos = {0, 0}}}
+			buf := [1]Glyph{Glyph{glyph = {Id = u16(glyph_index)}, pos= {0, 0}}}
 			render_info := font_get_render_info(
 				buf[:],
 				box.config.font_size,
-				ui_state.icon_state.freetype.face,
-				&ui_state.icon_state.rendered_glyph_cache,
-				context.temp_allocator,
+				ui_state.icon_state.freetype.face, 
+				&ui_state.icon_state.rendered_glyph_cache, 
+				context.temp_allocator
 			)
 			rects := get_text_quads(box^, render_info[:], context.temp_allocator)
-			for rect in rects {
-				append(&render_data, rect)
+			for rect in rects { 
+				append(render_data, rect)
 			}
 		}
 
 		if text_cursor, ok := boxes_render_data.text_cursor.(Rect_Render_Data); ok {
-			append(&render_data, text_cursor)
+			append(render_data, text_cursor)
 		}
 
 		if overlay, ok := boxes_render_data.overlay.(Rect_Render_Data); ok {
-			append(&render_data, overlay)
+			append(render_data, overlay)
 		}
 	}
-	return render_data
 }
 
 /*
@@ -525,9 +512,9 @@ get_text_quads :: proc(
 	allocator := context.allocator,
 ) -> [dynamic]Rect_Render_Data {
 	// Calculate baseline: (for now we just center text on both axis inside the box)
-	tallest_char         := font_get_glyphs_tallest_glyph(glyph_buffer)
-	rendered_len         := font_get_glyphs_rendered_len(glyph_buffer)
-	vertical_diff_half   := (box.height - int(tallest_char)) / 2
+	tallest_char := font_get_glyphs_tallest_glyph(glyph_buffer)
+	rendered_len := font_get_glyphs_rendered_len(glyph_buffer)
+	vertical_diff_half := (box.height - int(tallest_char)) / 2
 	horizontal_diff_half := (box.width - int(rendered_len)) / 2
 	// Really only the first point in baseline, which is all we need.
 	baseline_x, baseline_y: int
@@ -550,18 +537,18 @@ get_text_quads :: proc(
 	}
 	pen_x := baseline_x
 	// Doesn't need to be dynamically sized but static allocated size may confuse user.
-	glyph_rects  := make([dynamic]Rect_Render_Data, len(glyph_buffer), allocator)
-	atlas_width  := ui_state.font_state.atlas.row_width
+	glyph_rects := make([dynamic]Rect_Render_Data, len(glyph_buffer), allocator)
+	atlas_width := ui_state.font_state.atlas.row_width
 	atlas_height := ui_state.font_state.atlas.num_rows
 	for glyph, i in glyph_buffer {
 		cache_record := glyph.cache_record
-		final_x      := math.round(f32(baseline_x) + glyph.pos.x)
-		final_y      := math.round(f32(baseline_y) + glyph.pos.y)
-		descent      := cache_record.height - cache_record.bearing_y // Descent below baseline.
-		tex_tl_x     := f32(cache_record.atlas_x) / f32(atlas_width)
-		tex_tl_y     := f32(cache_record.atlas_y) / f32(atlas_height)
-		tex_br_x     := f32(cache_record.atlas_x + cache_record.width) / f32(atlas_width)
-		tex_br_y     := f32(cache_record.atlas_y + cache_record.height) / f32(atlas_height)
+		final_x := math.round(f32(baseline_x) + glyph.pos.x)
+		final_y := math.round(f32(baseline_y) + glyph.pos.y)
+		descent := cache_record.height - cache_record.bearing_y // Descent below baseline.
+		tex_tl_x := f32(cache_record.atlas_x) / f32(atlas_width)
+		tex_tl_y := f32(cache_record.atlas_y) / f32(atlas_height)
+		tex_br_x := f32(cache_record.atlas_x + cache_record.width) / f32(atlas_width)
+		tex_br_y := f32(cache_record.atlas_y + cache_record.height) / f32(atlas_height)
 		// text_color := get_text_color_from_base(box.config.color)
 		text_color := ui_state.dark_theme[box.config.text_color]
 		data := Rect_Render_Data {
@@ -577,9 +564,9 @@ get_text_quads :: proc(
 			tr_color             = text_color,
 			bl_color             = text_color,
 			br_color             = text_color,
-			ui_flags             = {.Font},
-			clip_tl              = vec2_f32(box.clip_tl),
-			clip_br              = vec2_f32(box.clip_br),
+			ui_flags 		     = {.Font},
+			clip_tl				 = vec2_f32(box.clip_tl),
+			clip_br				 = vec2_f32(box.clip_br),
 		}
 		// Set clipping rect for text.
 		// if box.parent != nil && box.parent.config.overflow_y != .Visible {
@@ -589,10 +576,162 @@ get_text_quads :: proc(
 		glyph_rects[i] = data
 	}
 
+	
+
 
 	return glyph_rects
 }
 
+render_ui_background_to_fbo :: proc(rect_rendering_data: [dynamic]Rect_Render_Data) {
+	gl.UseProgram(ui_state.quad_shader_program)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, ui_state.fbo_id_offscreen_ui)
+
+	arena, scratch := arena_allocator_new("render-background-to-fbo")
+	defer arena_allocator_destroy(arena, scratch)
+	background_rendering_data := make([dynamic]Rect_Render_Data, 0, int(f64(len(rect_rendering_data)) * 0.7), scratch)
+	for data in rect_rendering_data { 
+		if .Frosted_Glass not_in data.ui_flags {
+			append(&background_rendering_data, data)
+		}
+	}
+	n_rects := u32(len(background_rendering_data))
+	populate_vbuffer_with_rects(
+		ui_state.quad_vbuffer, // ui_state.quad_vabuffer,
+		0,
+		raw_data(background_rendering_data),
+		n_rects * size_of(Rect_Render_Data),
+	)
+	clear_screen()
+	gl.DrawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, i32(n_rects))
+	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+}
+
+render_blur_pass :: proc() { 
+	clear_screen()
+	gl.Disable(gl.BLEND)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, ui_state.fbo_id_blurred_ui)
+	gl.ActiveTexture(gl.TEXTURE2)
+	gl.BindTexture(gl.TEXTURE_2D, ui_state.tex_id_offscreen_ui)
+	gl.UseProgram(ui_state.blur_shader_program)
+	set_shader_vec2(ui_state.blur_shader_program, "texel_size", {1.0/f32(app.wx), 1.0/f32(app.wy)})
+	gl.Uniform1i(gl.GetUniformLocation(ui_state.blur_shader_program, "scene_texture"), 2)
+	// Doesn't really matter which draw call, we just need the shader to run.
+	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
+	gl.Enable(gl.BLEND)
+}
+
+render_ui :: proc(rect_rendering_data: [dynamic]Rect_Render_Data) {
+	if ui_state.frame_num == 0 {
+		return
+	}
+	clear_screen()
+	gl.UseProgram(ui_state.quad_shader_program)
+
+	gl.ActiveTexture(gl.TEXTURE0)
+	gl.BindTexture(gl.TEXTURE_2D, ui_state.tex_id_font_atlas)
+
+	gl.ActiveTexture(gl.TEXTURE1)
+	gl.BindTexture(gl.TEXTURE_2D, ui_state.tex_id_freq_spectrum)
+
+	gl.ActiveTexture(gl.TEXTURE2)
+	gl.BindTexture(gl.TEXTURE_2D, ui_state.tex_id_blurred_ui)
+
+	gl.ActiveTexture(gl.TEXTURE3)
+	gl.BindTexture(gl.TEXTURE_2D, ui_state.tex_id_freq_response)
+
+	n_rects := u32(len(rect_rendering_data))
+	populate_vbuffer_with_rects(
+		ui_state.quad_vbuffer, // ui_state.quad_vabuffer,
+		0,
+		raw_data(rect_rendering_data),
+		n_rects * size_of(Rect_Render_Data),
+	)
+	gl.DrawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, i32(n_rects))
+}
+
+draw :: proc(n_vertices: i32, indices: [^]u32) {
+	gl.DrawElements(gl.TRIANGLES, n_vertices, gl.UNSIGNED_INT, indices)
+}
+
+setup_for_quads :: proc(shader_program: ^u32) {
+	//odinfmt:disable
+	gl.BindVertexArray(ui_state.quad_vabuffer^)
+	// bind_shader(shader_program^)
+
+	gl.VertexAttribPointer(0, 2, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, top_left))
+	gl.VertexAttribDivisor(0, 1)
+	enable_layout(0)
+
+	gl.VertexAttribPointer(1, 2, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, bottom_right))
+	enable_layout(1)
+	gl.VertexAttribDivisor(1, 1)
+
+	// Trying to pass in a [4]vec4 for colors was fucky, so did this. Should clean up later.
+	gl.VertexAttribPointer(2, 4, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, tl_color))
+	enable_layout(2)
+	gl.VertexAttribDivisor(2, 1)
+
+	gl.VertexAttribPointer(3, 4, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, tr_color))
+	enable_layout(3)
+	gl.VertexAttribDivisor(3, 1)
+
+	gl.VertexAttribPointer(4, 4, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, bl_color))
+	enable_layout(4)
+	gl.VertexAttribDivisor(4, 1)
+
+	gl.VertexAttribPointer(5, 4, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, br_color))
+	enable_layout(5)
+	gl.VertexAttribDivisor(5, 1)
+
+	gl.VertexAttribPointer(6, 1, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, corner_radius))
+	enable_layout(6)
+	gl.VertexAttribDivisor(6, 1)
+
+	gl.VertexAttribPointer(7, 1, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, edge_softness))
+	enable_layout(7)
+	gl.VertexAttribDivisor(7, 1)
+
+	gl.VertexAttribPointer(8, 1, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, border_thickness))
+	enable_layout(8)
+	gl.VertexAttribDivisor(8, 1)
+
+	gl.VertexAttribPointer(9, 2, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, texture_top_left))
+	enable_layout(9)
+	gl.VertexAttribDivisor(9, 1)
+
+	gl.VertexAttribPointer(10, 2, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, texture_bottom_right))
+	enable_layout(10)
+	gl.VertexAttribDivisor(10, 1)
+
+	gl.VertexAttribIPointer(11, 1, gl.UNSIGNED_INT, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, ui_flags))
+	enable_layout(11)
+	gl.VertexAttribDivisor(11, 1)
+
+	gl.VertexAttribPointer(12, 1, gl.INT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, font_size))
+	enable_layout(12)
+	gl.VertexAttribDivisor(12, 1)
+
+	gl.VertexAttribPointer(13, 2, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, clip_tl))
+	enable_layout(13)
+	gl.VertexAttribDivisor(13, 1)
+
+	gl.VertexAttribPointer(14, 2, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, clip_br))
+	enable_layout(14)
+	gl.VertexAttribDivisor(14, 1)
+
+	gl.VertexAttribPointer(15, 1, gl.FLOAT, false, size_of(Rect_Render_Data), offset_of(Rect_Render_Data, rotation_radians))
+	enable_layout(15)
+	gl.VertexAttribDivisor(15, 1)
+
+	//odinfmt:enable
+}
+
+clear_screen :: proc() {
+	color := ui_state.dark_theme[.Inverse_On_Surface]
+	gl.ClearColor(color.r, color.g, color.b, color.a)
+	gl.Clear(gl.COLOR_BUFFER_BIT)
+}
 
 @(private = "file")
 // The material color palette generates text colors that go ontop of the base colors,
@@ -640,7 +779,7 @@ get_text_color_from_base :: proc(color_token: Semantic_Color_Token) -> Color_RGB
 	}
 	// For Tailwind colors and anything else without a semantic On_X pairing,
 	// derive text color from perceived luminance of the base.
-	base      := ui_state.dark_theme[color_token]
+	base := ui_state.dark_theme[color_token]
 	luminance := 0.299 * base.r + 0.587 * base.g + 0.114 * base.b
 	if luminance > 0.5 {
 		return Color_RGBA{0.1, 0.1, 0.1, 1}
