@@ -6,6 +6,7 @@ import "core:sort"
 import "core:strconv"
 import str "core:strings"
 import "core:text/edit"
+import dt "core:time/datetime"
 import "core:unicode"
 import sdl "vendor:sdl2"
 
@@ -27,13 +28,25 @@ text :: proc(label: string, config: Box_Config, id := "", extra_flags := Box_Fla
 	return box_signals(b)
 }
 
-icon :: proc(code_glyph: rune, hover_text: string, config: Box_Config, id := "", extra_flags := Box_Flags{}) -> Box_Signals {
-	b := box_from_cache({.Draw_Icon, .Text_Center} + extra_flags, config, "", id, icon_rune=code_glyph)
+icon :: proc(
+	code_glyph: rune,
+	hover_text: string,
+	config: Box_Config,
+	id := "",
+	extra_flags := Box_Flags{},
+) -> Box_Signals {
+	b       := box_from_cache({.Draw_Icon, .Text_Center} + extra_flags, config, "", id, icon_rune = code_glyph)
 	signals := box_signals(b)
 	return signals
 }
 
-icon_button :: proc(code_glyph: rune, hover_text: string, config: Box_Config, id := "", extra_flags := Box_Flags{}) -> Box_Signals {
+icon_button :: proc(
+	code_glyph: rune,
+	hover_text: string,
+	config: Box_Config,
+	id := "",
+	extra_flags := Box_Flags{},
+) -> Box_Signals {
 	signals := icon(code_glyph, hover_text, config, id, extra_flags + {.Clickable, .Hot_Animation, .Active_Animation})
 	if signals.hovering {
 		hover_help_text(hover_text, signals.box)
@@ -43,7 +56,12 @@ icon_button :: proc(code_glyph: rune, hover_text: string, config: Box_Config, id
 
 
 text_button :: proc(label: string, config: Box_Config, id := "", extra_flags := Box_Flags{}) -> Box_Signals {
-	box := box_from_cache({.Clickable, .Hot_Animation, .Active_Animation, .Draw, .Text_Center, .Draw_Text} + extra_flags, config, label, id)
+	box := box_from_cache(
+		{.Clickable, .Hot_Animation, .Active_Animation, .Draw, .Text_Center, .Draw_Text} + extra_flags,
+		config,
+		label,
+		id,
+	)
 	return box_signals(box)
 }
 
@@ -60,8 +78,7 @@ child_container :: proc(
 	id := "",
 	box_flags := Box_Flags{},
 	metadata := Box_Metadata{},
-) -> Box_Signals 
-{
+) -> Box_Signals {
 	config := config
 	if config.max_size == {0, 0} do config.max_size = {app.wx, app.wy}
 	box := box_from_cache(box_flags, config, "", id, metadata)
@@ -81,7 +98,7 @@ Track_Signals :: struct {
 }
 
 Edit_Text_State :: struct {
-	selection:  [2]int,
+	selection: [2]int,
 }
 
 Text_Box_Type :: enum {
@@ -101,8 +118,7 @@ edit_number_box :: proc(
 	id := "",
 	metadata := Box_Metadata{},
 	extra_flags := Box_Flags{},
-) -> Box_Signals 
-{
+) -> Box_Signals {
 	handle_input :: proc(editor: ^edit.State, box: ^Box, min_val, max_val: int) -> string {
 		write_idx: u32 = 0
 		for i := u32(0); i < app.curr_chars_stored; i += 1 {
@@ -118,11 +134,11 @@ edit_number_box :: proc(
 			case .DELETE:
 				edit.delete_to(editor, .Right)
 			case .UP:
-				curr_str_val := str.to_string(editor.builder^)
+				curr_str_val         := str.to_string(editor.builder^)
 				app.curr_chars_stored = write_idx
 				return increment_number_string(curr_str_val, max_val)
 			case .DOWN:
-				curr_str_val := str.to_string(editor.builder^)
+				curr_str_val         := str.to_string(editor.builder^)
 				app.curr_chars_stored = write_idx
 				return decrement_number_string(curr_str_val, min_val)
 			case:
@@ -130,14 +146,14 @@ edit_number_box :: proc(
 				if unicode.is_number(char) {
 					edit.input_rune(editor, char)
 					curr_str_val := str.to_string(editor.builder^)
-					curr_val := strconv.atoi(curr_str_val)
-					clamped_val := clamp(min_val, max_val, curr_val)
+					curr_val     := strconv.atoi(curr_str_val)
+					clamped_val  := clamp(min_val, max_val, curr_val)
 					if clamped_val != curr_val {
 						// Not sure if this is the right way to programatically edit
 						// the input state.
 						edit.move_to(editor, .Start)
 						edit.delete_to(editor, .End)
-						res_buffer := make([]byte, 10, context.temp_allocator)
+						res_buffer  := make([]byte, 10, context.temp_allocator)
 						new_str_val := strconv.itoa(res_buffer[:], curr_val)
 						edit.input_text(editor, new_str_val)
 					}
@@ -155,20 +171,20 @@ edit_number_box :: proc(
 	}
 
 	increment_number_string :: proc(curr_str_val: string, max_val: int) -> string {
-		curr_val := strconv.atoi(curr_str_val)
-		new_val := min(curr_val + 1, max_val)
+		curr_val   := strconv.atoi(curr_str_val)
+		new_val    := min(curr_val + 1, max_val)
 		res_buffer := make([]byte, 50, context.temp_allocator)
 		return strconv.itoa(res_buffer[:], new_val)
 	}
 
 	decrement_number_string :: proc(curr_str_val: string, min_val: int) -> string {
-		curr_val := strconv.atoi(curr_str_val)
-		new_val := max(curr_val - 1.0, min_val)
+		curr_val   := strconv.atoi(curr_str_val)
+		new_val    := max(curr_val - 1.0, min_val)
 		res_buffer := make([]byte, 50, context.temp_allocator)
 		return strconv.itoa(res_buffer[:], new_val)
 	}
 
-	tmp_buf := make([]byte, 32, context.temp_allocator)
+	tmp_buf       := make([]byte, 32, context.temp_allocator)
 	num_as_string := strconv.itoa(tmp_buf[:], value^)
 
 	box := box_from_cache(
@@ -202,19 +218,21 @@ edit_number_box :: proc(
 		existing_edit_box = false
 	}
 
-	state := ui_state.text_editors_state[box.id]
+	state           := ui_state.text_editors_state[box.id]
 	editor.selection = state.selection
 
 	new_data_string := handle_input(&editor, box, min_val, max_val)
 
 	if box_signals.shift_scrolled_up {
 		new_data_string = increment_number_string(str.to_string(editor.builder^), max_val)
-	} else if box_signals.shift_scrolled_down { 
+	} else if box_signals.shift_scrolled_down {
 		new_data_string = decrement_number_string(str.to_string(editor.builder^), min_val)
 	}
-	ui_state.text_editors_state[box.id] = {selection=editor.selection}
+	ui_state.text_editors_state[box.id] = {
+		selection = editor.selection,
+	}
 	new_value := strconv.atoi(new_data_string)
-	new_value = clamp(new_value, min_val, max_val)
+	new_value  = clamp(new_value, min_val, max_val)
 
 	value^ = new_value
 	edit.end(&editor)
@@ -253,9 +271,10 @@ edit_text_box :: proc(
 			case:
 				char := rune(keycode)
 				if unicode.is_alpha(char) ||
-				   unicode.is_digit(char) ||
-				   unicode.is_space(char) ||
-				   unicode.is_punct(char) {
+				unicode.is_digit(char)    ||
+				unicode.is_space(char)    ||
+				unicode.is_punct(char)
+				{
 					if app.keys_held[sdl.Scancode.LSHIFT] || app.keys_held[sdl.Scancode.RSHIFT] {
 						char = unicode.to_upper(char)
 					}
@@ -272,7 +291,7 @@ edit_text_box :: proc(
 			}
 		}
 		app.curr_chars_stored = write_idx
-		state.selection = editor.selection
+		state.selection       = editor.selection
 		return str.to_string(editor.builder^)
 	}
 
@@ -296,13 +315,13 @@ edit_text_box :: proc(
 	edit.setup_once(&editor, &builder)
 	edit.begin(&editor, 0, &builder)
 	edit.input_text(&editor, edit_box.text)
-	
+
 	existing_edit_box := true
 	if edit_box.id not_in ui_state.text_editors_state {
 		ui_state.text_editors_state[edit_box.id] = Edit_Text_State{}
 		existing_edit_box = false
 	}
-	state := &ui_state.text_editors_state[edit_box.id]
+	state           := &ui_state.text_editors_state[edit_box.id]
 	editor.selection = state.selection
 
 	if text != nil do delete(text^)
@@ -324,34 +343,30 @@ vertical_slider :: proc(
 	min_val: f32,
 	max_val: f32,
 	id := "",
- 	extra_flags := Box_Flags{},
+	extra_flags := Box_Flags{},
 ) -> Slider_Signals {
 	container_id := id != "" ? tprintf("{}-container", id) : ""
-	track_id := id != "" ? tprintf("{}-track", id) : ""
+	track_id     := id != "" ? tprintf("{}-track", id) : ""
 
-	child_container(
-		config,
-		{direction = .Vertical, alignment_horizontal = .Center},
-		container_id,
-	)
+	child_container(config, {direction = .Vertical, alignment_horizontal = .Center}, container_id)
 	track := box_from_cache(
 		{.Clickable, .Draw, .Scrollable, .Glow, .Frosted},
 		{
-			size = {{.Percent, 0.5}, {.Percent, 1}},
-			color = .Secondary
+			size  = {{.Percent, 0.5}, {.Percent, 1}},
+			color = .Secondary,
 		},
 	)
 	track_signals := box_signals(track)
-	if track_signals.pressed { 
+	if track_signals.pressed {
 		delta_from_top := f32(app.mouse.pos.y - track.top_left.y)
 		ratio_of_click := delta_from_top / f32(track.prev_height)
-		slider_value^  =  (1 - ratio_of_click) * max_val
+		slider_value^ = (1 - ratio_of_click) * max_val
 	}
 
 	grip := box_from_cache(
 		{.Clickable, .Draggable, .Draw, .Hot_Animation, .Glow},
 		{
-			size   = {{.Percent, 0.8}, {.Percent, 0.1}},
+			size            = {{.Percent, 0.8}, {.Percent, 0.1}},
 			color           = .Primary,
 			floating_type   = .Relative_Parent,
 			floating_offset = {0.5, map_range(min_val, max_val, 1, 0, slider_value^)},
@@ -360,13 +375,13 @@ vertical_slider :: proc(
 		},
 	)
 	grip_signals := box_signals(grip)
-	if grip_signals.box == ui_state.dragged_box { 
+	if grip_signals.box == ui_state.dragged_box {
 		// undo_push(slider_value)
-		mouse_y := f32(app.mouse.pos.y)
-        track_top := f32(track.top_left.y)  // This is also from last frame
-        track_height := f32(track.prev_height)  // Use last_height instead of height
-        normalized_pos := clamp((mouse_y - track_top) / track_height, 0, 1)
-        slider_value^ = map_range(f32(0), f32(1), max_val, min_val, normalized_pos)
+		mouse_y        := f32(app.mouse.pos.y)
+		track_top      := f32(track.top_left.y) // This is also from last frame
+		track_height   := f32(track.prev_height) // Use last_height instead of height
+		normalized_pos := clamp((mouse_y - track_top) / track_height, 0, 1)
+		slider_value^ = map_range(f32(0), f32(1), max_val, min_val, normalized_pos)
 	}
 
 	if track_signals.scrolled_up || grip_signals.scrolled_up {
@@ -387,8 +402,8 @@ multi_button_set :: proc(
 	id := "",
 	extra_flags := Box_Flags{},
 	allocator := context.allocator,
-) -> [dynamic]T where intrinsics.type_is_string(T) || intrinsics.type_is_numeric(T)
-{
+) -> [dynamic]T where intrinsics.type_is_string(T) ||
+	intrinsics.type_is_numeric(T) {
 	container_id := id != "" ? tprintf("{}-container", id) : ""
 	child_container(config, child_layout, container_id)
 
@@ -401,22 +416,13 @@ multi_button_set :: proc(
 	// --- Draw buttons and store them in a buffer so we can query their signals.
 	for value, i in values {
 		item_id := id != "" ? tprintf("{}-item-{}", id, i) : ""
-		child_container(
-			{
-				size = Size_Fit_Children,
-			},
-			{
-				direction = .Horizontal,
-				gap_horizontal = 7,
-			},
-			item_id,
-		)
+		child_container({size = Size_Fit_Children}, {direction = .Horizontal, gap_horizontal = 7}, item_id)
 		button_id := id != "" ? tprintf("{}-button-{}", id, i) : ""
 		b := button(
 			{
-				size = Size_Fit_Text,
+				size    = Size_Fit_Text,
 				padding = {10, 10, 10, 10},
-				color = .Secondary,
+				color   = .Secondary,
 			},
 			button_id,
 		)
@@ -435,9 +441,9 @@ multi_button_set :: proc(
 		text(
 			tprintf("{} heya", val_as_str),
 			{
-				color 		  =  .Background,
-				size = Size_Fit_Text_And_Grow,
-				text_justify  = {.End, .Center}
+				color        = .Background,
+				size         = Size_Fit_Text_And_Grow,
+				text_justify = {.End, .Center},
 			},
 			text_id,
 		)
@@ -450,7 +456,7 @@ multi_button_set :: proc(
 	*/
 	for button in buttons {
 		if button.signals.box.selected {
-			button.signals.box.config.color = .Warning 
+			button.signals.box.config.color = .Warning
 		}
 	}
 
@@ -480,16 +486,23 @@ multi_button_set :: proc(
 // At the moment we assume all dragging windows should be draggable anywhere in the root container,
 // we could most likely restrict this to have nested floating windows. i.e. you can't drag some floating
 // window outside of it's parent's bounds.
-@(deferred_out = box_floating_close_children)
-draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := "", extra_flags := Box_Flags{}) ->
-(container_signals: Box_Signals, close_btn_signals: Box_Signals, maximise_button_signals: Box_Signals, maximised: bool) 
-{
+draggable_window_begin :: proc(
+	title: string,
+	child_layout: Box_Child_Layout,
+	id := "",
+	extra_flags := Box_Flags{},
+) -> (
+	container_signals: Box_Signals,
+	close_btn_signals: Box_Signals,
+	maximise_button_signals: Box_Signals,
+	maximised: bool,
+) {
 	container := box_from_cache(
 		{.Drop_Shadow},
 		{
 			floating_type   = .Absolute_Pixel,
 			floating_offset = box_center(ui_state.root^),
-			size   		    = Size_Fit_Children,
+			size            = Size_Fit_Children,
 			z_index         = 20,
 		},
 		"",
@@ -504,17 +517,17 @@ draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := ""
 			// This probably won't work since boxes aren't sized until the end of the frame.
 			opened = true,
 			// Put floating container in the center of the screen the first time it's created.
-			offset = {f32(app.wx) / 2 , f32(app.wy) / 2}
+			offset = {f32(app.wx) / 2, f32(app.wy) / 2},
 		}
 		ui_state.draggable_window_offsets[container.id] = data
 	}
-	window_metadata := &ui_state.draggable_window_offsets[container.id] 
+	window_metadata := &ui_state.draggable_window_offsets[container.id]
 	offset_from_root = &window_metadata.offset
 	container.config.floating_offset = offset_from_root^
 
 	child_container(
 		{
-			size = {{.Grow, 100}, {.Fit_Children, 1}}
+			size = {{.Grow, 100}, {.Fit_Children, 1}},
 		},
 		{direction = .Horizontal},
 	)
@@ -522,21 +535,21 @@ draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := ""
 	maximise_button := text_button(
 		"o",
 		{
-			color = .Green_500,
-			size = Size_Fit_Text_And_Grow,
-			max_size = {50, 50}
-		}
+			color    = .Green_500,
+			size     = Size_Fit_Text_And_Grow,
+			max_size = {50, 50},
+		},
 	)
-	if maximise_button.clicked { 
+	if maximise_button.clicked {
 		window_metadata.maximised = !window_metadata.maximised
 	}
 
 	title_bar := box_from_cache(
 		{.Clickable, .Draw_Text, .Draw, .Hot_Animation, .Active_Animation, .Frosted},
 		{
-			size = {{.Percent, .90}, {.Fit_Text, 1}},
+			size    = {{.Percent, .90}, {.Fit_Text, 1}},
 			padding = {top = 5, bottom = 5},
-			color = .Tertiary,
+			color   = .Tertiary,
 			z_index = container.z_index,
 		},
 		title,
@@ -544,12 +557,12 @@ draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := ""
 	close_button := text_button(
 		"x",
 		{
-			color = .Error_Container,
-			size = Size_Fit_Text_And_Grow,
-			max_size = {50, 50}
+			color    = .Error_Container,
+			size     = Size_Fit_Text_And_Grow,
+			max_size = {50, 50},
 		},
 	)
-	if close_button.clicked { 
+	if close_button.clicked {
 		window_metadata.opened = false
 	}
 
@@ -563,8 +576,16 @@ draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := ""
 				f32(app.mouse.pos.y) - offset_from_root.y,
 			}
 		}
-		offset_from_root.x = clamp(f32(app.mouse.pos.x) - window_metadata.grab_offset.x, 0, f32(app.wx - container.prev_width))
-		offset_from_root.y = clamp(f32(app.mouse.pos.y) - window_metadata.grab_offset.y, 0, f32(app.wy - container.prev_height))
+		offset_from_root.x = clamp(
+			f32(app.mouse.pos.x) - window_metadata.grab_offset.x,
+			0,
+			f32(app.wx - container.prev_width),
+		)
+		offset_from_root.y = clamp(
+			f32(app.mouse.pos.y) - window_metadata.grab_offset.y,
+			0,
+			f32(app.wy - container.prev_height),
+		)
 		container.config.floating_offset = offset_from_root^
 	} else {
 		window_metadata.dragging = false
@@ -572,88 +593,103 @@ draggable_window :: proc(title: string, child_layout: Box_Child_Layout, id := ""
 	return box_signals(container), close_button, maximise_button, window_metadata.maximised
 }
 
-Knob_Type :: enum { 
-	Generic, 
+@(deferred_out = box_floating_close_children)
+draggable_window :: proc(
+	title: string,
+	child_layout: Box_Child_Layout,
+	id := "",
+	extra_flags := Box_Flags{},
+) -> (
+	container_signals: Box_Signals,
+	close_btn_signals: Box_Signals,
+	maximise_button_signals: Box_Signals,
+	maximised: bool,
+) {
+	return draggable_window_begin(title, child_layout, id, extra_flags)
+}
+
+Knob_Type :: enum {
+	Generic,
 	Frequency,
-	Q, 
-	Gain, 
+	Q,
+	Gain,
 	Panning,
 }
 
 circular_knob :: proc(
-    label: string,
-    config: Box_Config,
-    value: ^f64,
-    min_val: f64,
-    max_val: f64,
+	label: string,
+	config: Box_Config,
+	value: ^f64,
+	min_val: f64,
+	max_val: f64,
 	logarithmic := false,
-    id := "",
-    knob_size: f32 = 60,  // diameter in pixels
-    extra_flags := Box_Flags{},
-	type := Knob_Type{}
+	id := "",
+	knob_size: f32 = 60, // diameter in pixels
+	extra_flags := Box_Flags{},
+	type := Knob_Type{},
 ) {
-    // Container
+	// Container
 	container_id := id != "" ? tprintf("{}-container", id) : ""
-    child_container(
-        config,
-        {direction = .Vertical, alignment_horizontal = .Center, gap_vertical = 5},
+	child_container(
+		config,
+		{
+			direction            = .Vertical,
+			alignment_horizontal = .Center,
+			gap_vertical         = 5,
+		},
 		container_id,
-    )
+	)
 
 	body_string: string
 	switch type {
-		case .Q:
-			body_string = tprintf("%.3f", value^)
-		case .Gain:
-			body_string = tprintf("%.2f db", value^)
-		case .Frequency:
-			body_string = tprintf("%d hz", int(value^))
-		case .Generic, .Panning:
-			body_string = tprintf("%.2f", value^)
+	case .Q:
+		body_string = tprintf("%.3f", value^)
+	case .Gain:
+		body_string = tprintf("%.2f db", value^)
+	case .Frequency:
+		body_string = tprintf("%d hz", int(value^))
+	case .Generic, .Panning:
+		body_string = tprintf("%.2f", value^)
 	}
 	// Track (circular background)
 	knob_body := box_from_cache(
 		{.Clickable, .Draw, .Scrollable, .Glow, .Knob_Ring, .Draw_Text},
 		{
-			size = {{.Fixed, knob_size}, {.Fixed, knob_size}},
+			size          = {{.Fixed, knob_size}, {.Fixed, knob_size}},
 			// color = config.color,
-			color = .Secondary,
-			corner_radius = int(knob_size / 2),  // Makes it circular
-			text_color = .Slate_900,
-			font_size = 12,
+			color         = .Secondary,
+			corner_radius = int(knob_size / 2), // Makes it circular
+			text_color    = .Slate_900,
+			font_size     = 12,
 		},
 		metadata = Metadata_Knob{f32(min_val), f32(max_val), f32(value^), logarithmic},
-		label = body_string
+		label = body_string,
 	)
 	if type == .Panning do knob_body.flags -= {.Draw_Text, .Knob_Ring}
 
 	knob_body_signals := box_signals(knob_body)
 
 	label_id := id != "" ? tprintf("{}-label", id) : ""
-	text(
-		label,
-		{color = .Red_500, size = Size_Fit_Text},
-		label_id,
-	)
+	text(label, {color = .Red_500, size = Size_Fit_Text}, label_id)
 
 	scroll_speed := app.keys_held[sdl.Scancode.LSHIFT] ? 200.0 : 40.0
 	if knob_body_signals.scrolled_up {
 		// undo_push(value)
 		if logarithmic {
 			value^ *= math.pow(max_val / min_val, 1.0 / scroll_speed)
-		} else { 
-			value^ += (max_val - min_val) / scroll_speed 
+		} else {
+			value^ += (max_val - min_val) / scroll_speed
 		}
-	} else if knob_body_signals.scrolled_down  { 
+	} else if knob_body_signals.scrolled_down {
 		// undo_push(value)
 		if logarithmic {
 			value^ /= math.pow(max_val / min_val, 1.0 / scroll_speed)
 		} else {
-			value^ -= (max_val - min_val) / scroll_speed 
+			value^ -= (max_val - min_val) / scroll_speed
 		}
 	}
 	value^ = clamp(value^, min_val, max_val)
-   
+
 	knob_indicator: {
 		// Calculate grip position
 		center_x := f64(knob_body.top_left.x + knob_body.width / 2)
@@ -661,8 +697,8 @@ circular_knob :: proc(
 		// This code is parameterized to facilitate ease of tweaking deadzone and scrolling animation,
 		// but in the future once I've settled on some values we can hardcode values.
 
-		deadzone_center_deg := 90.0 
-		deadzone_size_deg   := 80.0 
+		deadzone_center_deg := 90.0
+		deadzone_size_deg   := 80.0
 
 		start_angle_deg := deadzone_center_deg + (deadzone_size_deg / 2)
 		sweep_range_deg := 360.0 - deadzone_size_deg
@@ -671,24 +707,29 @@ circular_knob :: proc(
 		start_angle := start_angle_deg * math.PI / 180.0
 		sweep_range := sweep_range_deg * math.PI / 180.0
 
-		t := logarithmic \
-			? math.ln(value^ / min_val) / math.ln(max_val / min_val) \
-			: (value^ - min_val) / (max_val - min_val)
+		t     :=
+			logarithmic ? math.ln(value^ / min_val) / math.ln(max_val / min_val) : (value^ - min_val) / (max_val - min_val)
 		angle := start_angle + t * sweep_range
 		// angle := start_angle + map_range(min_val, max_val, 0, sweep_range, value^)
-		
+
 		// Position on circumference
-		radius := knob_size / 2 * 0.7
+		radius        := knob_size / 2 * 0.7
 		grip_offset_x := 0.5 + math.cos(angle) * 0.7
 		grip_offset_y := 0.5 + math.sin(angle) * 0.7
-		
+
 		inner_r := f64(knob_size) / 2 * 0.55
-		outer_r := f64(knob_size) / 2 
+		outer_r := f64(knob_size) / 2
 		line(
 			{
 				color          = .Primary,
-				line_start     = {f32(center_x + math.cos(angle) * inner_r), f32(center_y + math.sin(angle) * inner_r)},
-				line_end       = {f32(center_x + math.cos(angle) * outer_r), f32(center_y + math.sin(angle) * outer_r)},
+				line_start     = {
+					f32(center_x + math.cos(angle) * inner_r),
+					f32(center_y + math.sin(angle) * inner_r),
+				},
+				line_end       = {
+					f32(center_x + math.cos(angle) * outer_r),
+					f32(center_y + math.sin(angle) * outer_r),
+				},
 				line_thickness = 5,
 				corner_radius  = 1,
 				edge_softness  = 1,
@@ -699,8 +740,8 @@ circular_knob :: proc(
 	if ui_state.dragged_box == knob_body {
 		// undo_push(value)
 		scale_factor := app.keys_held[sdl.Scancode.LSHIFT] ? 0.8 : 3.8
-		delta_y := app.mouse_last_frame.pos.y - app.mouse.pos.y
-		normalized := f64(delta_y) / f64(app.wy) // fraction of screen height per pixel drag
+		delta_y      := app.mouse_last_frame.pos.y - app.mouse.pos.y
+		normalized   := f64(delta_y) / f64(app.wy) // fraction of screen height per pixel drag
 		if logarithmic {
 			t := math.ln(value^ / min_val) / math.ln(max_val / min_val)
 			t  = clamp(t + normalized * scale_factor, 0, 1)
@@ -709,32 +750,23 @@ circular_knob :: proc(
 			value^ += normalized * (max_val - min_val) * scale_factor
 		}
 		value^ = clamp(value^, min_val, max_val)
-	} 
+	}
 }
 
 // Most of the existing layout code and sizing stuff won't really apply to lines.
 // We just pass in the start, end and thickness and the renderer works out the rest.
-line :: proc(
-	config: Box_Config,
-	id := "",
-	extra_flags := Box_Flags{},
-) -> Box_Signals {
-	l := box_from_cache(
-		{.Draw, .Line} + extra_flags,
-		config,
-		"",
-		id,
-	)
+line :: proc(config: Box_Config, id := "", extra_flags := Box_Flags{}) -> Box_Signals {
+	l := box_from_cache({.Draw, .Line} + extra_flags, config, "", id)
 	return box_signals(l)
 }
 
 Virtual_List_State :: struct {
-	first_visible: 		   int,
-	last_visible:  		   int,
-	total_items:   		   int,
-	item_size:   		   int,
-	direction:             Layout_Direction,
-	container_signals:     Box_Signals,
+	first_visible:     int,
+	last_visible:      int,
+	total_items:       int,
+	item_size:         int,
+	direction:         Layout_Direction,
+	container_signals: Box_Signals,
 }
 
 virtual_list_end :: proc(state: Virtual_List_State) {
@@ -747,15 +779,11 @@ virtual_list_end :: proc(state: Virtual_List_State) {
 		case .Horizontal:
 			end_spacer_size = {{.Fixed, f32(items_after * state.item_size)}, {.Grow, 1}}
 		}
-		box_from_cache(
-			{},
-			{size = end_spacer_size},
-			id = tprintf("{}-vl-end-spacer", state.container_signals.box.id),
-		)
+		box_from_cache({}, {size = end_spacer_size}, id = tprintf("{}-vl-end-spacer", state.container_signals.box.id))
 	}
 
 	// Close the container (same logic as box_regular_close_children).
-	box := state.container_signals.box
+	box  := state.container_signals.box
 	size := box.config.size
 	if size.x.type == .Fit_Children || size.x.type == .Fit_Children_And_Grow {
 		box.width = sizing_calc_fit_children_width(box^)
@@ -774,46 +802,144 @@ virtual_list_end :: proc(state: Virtual_List_State) {
 	}
 }
 
-hover_help_text :: proc(label: string, main_box: ^Box) { 
+hover_help_text :: proc(label: string, main_box: ^Box) {
 	// By default hover text is rendered inline with the left edge of the parent box,
 	// unless it would overflow.
-	font_size :u32 = 20
-	padding_size := 4
-	text_len := font_get_strings_rendered_len(label, font_size) + padding_size * 2 
-	floating_offset: [2]f32 
+	font_size: u32 = 20
+	padding_size    := 4
+	text_len        := font_get_strings_rendered_len(label, font_size) + padding_size * 2
+	floating_offset: [2]f32
 	if (text_len + main_box.top_left.x) > app.wx {
 		printfln("help label: {} will go offscreen, so render it to the left", label)
-		floating_offset = {
-			f32(main_box.bottom_right.x - text_len),
-			f32(main_box.bottom_right.y + 2)
-		}
-	} else { 
-		floating_offset = {
-			f32(main_box.top_left.x + padding_size),
-			f32(main_box.bottom_right.y + 2)
-		}
+		floating_offset = {f32(main_box.bottom_right.x - text_len), f32(main_box.bottom_right.y + 2)}
+	} else {
+		floating_offset = {f32(main_box.top_left.x + padding_size), f32(main_box.bottom_right.y + 2)}
 	}
 	child_container(
 		{
-			floating_type = .Absolute_Pixel,
+			floating_type   = .Absolute_Pixel,
 			floating_offset = floating_offset,
-			size = Size_Fit_Children,
-			padding = padding(padding_size),
-			border = border(1),
-			border_color = .Red_500,
-			z_index = 500,
-			min_size = {50, 30},
-			corner_radius = 3,
+			size            = Size_Fit_Children,
+			padding         = padding(padding_size),
+			border          = border(1),
+			border_color    = .Red_500,
+			z_index         = 500,
+			min_size        = {50, 30},
+			corner_radius   = 3,
 		},
 		{alignment_horizontal = .Center, alignment_vertical = .Center},
-		box_flags = {.Draw, .Frosted, .Draw_Border}
+		box_flags = {.Draw, .Frosted, .Draw_Border},
 	)
-	text(label, {size=Size_Fit_Text, text_justify = {.Center, .Center}, color = .Stone_500, font_size = 20})
+	text(
+		label,
+		{
+			size         = Size_Fit_Text,
+			text_justify = {.Center, .Center},
+			color        = .Stone_500,
+			font_size    = 20,
+		},
+	)
 }
 
 VList_Item_Size :: union {
 	int,
 	f32,
+}
+
+virtual_list_begin :: proc(
+	config: Box_Config,
+	child_layout: Box_Child_Layout,
+	total_items: int,
+	item_size: VList_Item_Size,
+	id := "",
+	box_flags := Box_Flags{},
+	metadata := Box_Metadata{},
+) -> Virtual_List_State {
+	config := config
+	if config.max_size == {0, 0} do config.max_size = {app.wx, app.wy}
+
+	direction := child_layout.direction
+	switch direction {
+	case .Vertical:
+		config.overflow_y = .Auto
+	case .Horizontal:
+	// config.overflow_x = .Auto
+	}
+
+	box := box_from_cache(box_flags + {.Scrollable}, config, "", id)
+	box_open_children(box, child_layout)
+
+	// TODO: X-axis virtualization disabled for now due to clipping issues with floating containers.
+	// Re-enable once we have a No_Clip flag or similar solution.
+	if direction == .Horizontal {
+		return {
+			first_visible = 0,
+			last_visible = total_items - 1,
+			total_items = total_items,
+			item_size = 0,
+			direction = direction,
+			container_signals = box_signals(box),
+		}
+	}
+
+	container_extent: int
+	switch direction {
+	case .Vertical:
+		container_extent = box.config.size.y.type == .Fixed ? int(config.size.y.amount) : box.prev_height
+	case .Horizontal:
+	// container_extent = box.config.size.x.type == .Fixed ? int(config.size.x.amount) : box.prev_width
+	}
+
+	actual_item_size := 0
+	switch v in item_size {
+	case f32:
+		actual_item_size = int(f32(container_extent) * v)
+	case int:
+		actual_item_size = v
+	}
+
+	if actual_item_size <= 0 {
+		return {
+			first_visible = 0,
+			last_visible = total_items - 1,
+			total_items = total_items,
+			item_size = 0,
+			direction = direction,
+			container_signals = box_signals(box),
+		}
+	}
+
+	scroll_offset := 0
+	if box.id in ui_state.scroll_offsets {
+		scroll_offset = ui_state.scroll_offsets[box.id]
+	}
+
+	SCROLL_CHANGE_PER_TICK :: 40
+	scroll_buffer := (SCROLL_CHANGE_PER_TICK / actual_item_size) + 2
+	first         := max(scroll_offset / actual_item_size - scroll_buffer, 0)
+	visible_count := (container_extent / actual_item_size) + scroll_buffer * 2
+	last          := min(first + visible_count - 1, total_items - 1)
+
+	// Start spacer: pushes visible items to correct scroll position.
+	if first > 0 {
+		start_spacer_size: [2]Box_Size
+		switch direction {
+		case .Vertical:
+			start_spacer_size = {{.Grow, 1}, {.Fixed, f32(first * actual_item_size)}}
+		case .Horizontal:
+			start_spacer_size = {{.Fixed, f32(first * actual_item_size)}, {.Grow, 1}}
+		}
+		box_from_cache({}, {size = start_spacer_size}, id = tprintf("{}-vl-start-spacer", box.id))
+	}
+
+	return {
+		first_visible = first,
+		last_visible = last,
+		total_items = total_items,
+		item_size = actual_item_size,
+		direction = direction,
+		container_signals = box_signals(box),
+	}
 }
 
 @(deferred_out = virtual_list_end)
@@ -825,95 +951,204 @@ virtual_list :: proc(
 	id := "",
 	box_flags := Box_Flags{},
 	metadata := Box_Metadata{},
-) -> Virtual_List_State
-{
-	config := config
-	if config.max_size == {0, 0} do config.max_size = {app.wx, app.wy}
+) -> Virtual_List_State {
+	return virtual_list_begin(config, child_layout, total_items, item_size, id, box_flags, metadata)
+}
 
-	direction := child_layout.direction
-	switch direction {
-	case .Vertical:
-		config.overflow_y = .Auto
-	case .Horizontal:
-		// config.overflow_x = .Auto
-	}
+calender :: proc() -> dt.Date {
+	month: int = -1
+	year: int = -1
+	day: int = 12
 
-	box := box_from_cache(box_flags + {.Scrollable}, config, "", id)
-	box_open_children(box, child_layout)
-
-	// TODO: X-axis virtualization disabled for now due to clipping issues with floating containers.
-	// Re-enable once we have a No_Clip flag or similar solution.
-	if direction == .Horizontal {
-		return {
-			first_visible 		  = 0,
-			last_visible  		  = total_items - 1,
-			total_items   		  = total_items,
-			item_size   		  = 0,
-			direction             = direction,
-			container_signals     = box_signals(box),
+	month_name_from_month_number :: proc(num: int) -> string {
+		switch num {
+		case 1:
+			return "January"
+		case 2:
+			return "February"
+		case 3:
+			return "March"
+		case 4:
+			return "April"
+		case 5:
+			return "May"
+		case 6:
+			return "June"
+		case 7:
+			return "July"
+		case 8:
+			return "August"
+		case 9:
+			return "September"
+		case 10:
+			return "October"
+		case 11:
+			return "November"
+		case 12:
+			return "December"
 		}
+		return ""
 	}
-
-	container_extent: int
-	switch direction {
-	case .Vertical:
-		container_extent = box.config.size.y.type == .Fixed ? int(config.size.y.amount) : box.prev_height
-	case .Horizontal:
-		// container_extent = box.config.size.x.type == .Fixed ? int(config.size.x.amount) : box.prev_width
-	}
-
-	actual_item_size := 0
-	switch v in item_size {
-		case f32:
-			actual_item_size = int(f32(container_extent) * v)
-		case int:
-			actual_item_size = v
-	}
-
-	if actual_item_size <= 0 {
-		return {
-			first_visible 		  = 0,
-			last_visible  		  = total_items - 1,
-			total_items   		  = total_items,
-			item_size   		  = 0,
-			direction             = direction,
-			container_signals     = box_signals(box),
+	day_is_valid :: proc(year: int, month: int, day: int) -> bool {
+		if day < 1 || month < 1 || month > 12 {
+			return false
 		}
-	}
-
-	scroll_offset := 0
-	if box.id in ui_state.scroll_offsets {
-		scroll_offset = ui_state.scroll_offsets[box.id]
-	}
-
-	SCROLL_CHANGE_PER_TICK :: 40
-	scroll_buffer := (SCROLL_CHANGE_PER_TICK / actual_item_size) + 2
-	first := max(scroll_offset / actual_item_size - scroll_buffer, 0)
-	visible_count := (container_extent / actual_item_size) + scroll_buffer * 2
-	last := min(first + visible_count - 1, total_items - 1)
-
-	// Start spacer: pushes visible items to correct scroll position.
-	if first > 0 {
-		start_spacer_size: [2]Box_Size
-		switch direction {
-		case .Vertical:
-			start_spacer_size = {{.Grow, 1}, {.Fixed, f32(first * actual_item_size)}}
-		case .Horizontal:
-			start_spacer_size = {{.Fixed, f32(first * actual_item_size)}, {.Grow, 1}}
+		days_in_month := [12]int{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+		is_leap       := (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+		if is_leap {
+			days_in_month[1] = 29
 		}
-		box_from_cache(
+		return day <= days_in_month[month - 1]
+	}
+
+	child_container(
+		{
+			size    = {{.Fixed, 300}, {.Fixed, 400}},
+			padding = padding(10),
+			color   = .Blue_700,
+		},
+		{direction = .Vertical},
+		box_flags = {.Draw},
+	)
+
+	topbar: {
+		child_container(
+			{
+				size = {{.Percent, 1}, {.Fixed, 50}},
+			},
 			{},
-			{size = start_spacer_size},
-			id = tprintf("{}-vl-start-spacer", box.id),
+		)
+
+		year_text := year != -1 ? tprintf("{}", year) : "Please select a year"
+		year_btn  := text_button(year_text, {size = Size_Fit_Text_And_Grow, text_color = .Slate_900})
+		if ui_state.last_clicked_box == year_btn.box {
+			virtual_list(
+				{
+					size                = {{.Fit_Children, 1}, {.Fixed, 200}},
+					floating_type       = .Relative_Other,
+					floating_anchor_box = year_btn.box,
+					z_index             = 50,
+				},
+				{direction = .Vertical},
+				2500,
+				30,
+				box_flags = {.Scrollable, .Scrollbar, .Clickable},
+			)
+			for i in 0 ..< 2500 {
+				specific_year := text_button(
+					tprintf("{}", 2500 - i),
+					{
+						size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, 30}},
+						text_color = .Orange_600,
+					},
+				)
+				if specific_year.clicked {
+					printf("year clicked!")
+					year = 2500 - i
+				}
+			}
+		}
+		month_text := month == -1 ? "Month" : month_name_from_month_number(month)
+		month_btn  := text_button(month_text, {size = Size_Fit_Text_And_Grow, text_color = .Slate_900})
+		if ui_state.last_clicked_box == month_btn.box {
+			virtual_list(
+				{
+					size                = {{.Fit_Children, 1}, {.Fixed, 200}},
+					floating_type       = .Relative_Other,
+					floating_anchor_box = month_btn.box,
+					z_index             = 50,
+				},
+				{direction = .Vertical},
+				6,
+				30,
+			)
+			text_button(
+				"January",
+				{
+					size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, 30}},
+					text_color = .Orange_600,
+				},
+			)
+			text_button(
+				"February",
+				{
+					size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, 30}},
+					text_color = .Orange_600,
+					z_index    = 50,
+				},
+			)
+			text_button(
+				"March",
+				{
+					size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, 30}},
+					text_color = .Orange_600,
+					z_index    = 50,
+				},
+			)
+			text_button(
+				"April",
+				{
+					size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, 30}},
+					text_color = .Orange_600,
+				},
+			)
+			text_button(
+				"May",
+				{
+					size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, 30}},
+					text_color = .Orange_600,
+				},
+			)
+			text_button(
+				"June",
+				{
+					size       = {{.Fit_Text_And_Grow, 1}, {.Fixed, 30}},
+					text_color = .Orange_600,
+				},
+			)
+		}
+
+	}
+
+	dates: {
+		child_container(
+			{
+				size = {{.Percent, 1}, {.Percent, .5}},
+			},
+			{direction = .Vertical},
+		)
+		day := 1
+		for _ in 0 ..< 5 {
+			child_container(
+				{
+					size = {{.Percent, 1}, {.Percent, 0.25}},
+				},
+				{},
+			)
+			for _ in 0 ..< 7 {
+				if !day_is_valid(year, month, day) {
+					continue
+				}
+				if text_button(
+					   tprintf("{}", day),
+					   {
+						   size       = {{.Percent, 1.0 / 7.0}, {.Percent, 1}},
+						   text_color = .Red_500,
+					   },
+				   ).clicked {
+					day = day
+				}
+				day += 1
+			}
+		}
+		text_button(
+			"submit",
+			{
+				size       = {{.Percent, 1}, {.Fixed, 70}},
+				text_color = .Red_700,
+				color      = .Green_300,
+			},
 		)
 	}
-
-	return {
-		first_visible 		  = first,
-		last_visible  		  = last,
-		total_items   		  = total_items,
-		item_size   		  = actual_item_size,
-		direction             = direction,
-		container_signals     = box_signals(box),
-	}
+	return dt.Date{}
 }

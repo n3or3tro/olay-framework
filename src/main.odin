@@ -1,5 +1,4 @@
 package main
-import app "olay"
 import "base:runtime"
 import "core:dynlib"
 import "core:fmt"
@@ -9,6 +8,7 @@ import "core:os"
 import "core:prof/spall"
 import "core:sync"
 import "core:time"
+import app "olay"
 
 
 PROFILING :: #config(profile, false)
@@ -16,15 +16,17 @@ MODE_RELEASE :: #config(release, false)
 MODE_HOT_RELOAD :: #config(hot_reload, true)
 
 VERTEX_SHADER_PATH :: "src/olay/shaders/box_vertex_shader.glsl"
-PIXEL_SHADER_PATH  :: "src/olay/shaders/box_pixel_shader.glsl"
+PIXEL_SHADER_PATH :: "src/olay/shaders/box_pixel_shader.glsl"
 
 DLL_PATH :: "build/app." + dynlib.LIBRARY_FILE_EXTENSION
+DLL_SOURCE_PATH :: "./olay"
 // when MODE_RELEASE {
 // 	COLOR_FILE_PATH :: "dark-theme.json"
 // } else {
 // 	COLOR_FILE_PATH :: "util/dark-theme.json"
 // }
 COLOR_FILE_PATH :: "util/dark-theme.json"
+LUA_UI_FILE_PATH :: "ui/main.lua"
 
 print :: fmt.print
 println :: fmt.println
@@ -34,32 +36,33 @@ aprintf :: fmt.aprintf
 tprintf :: fmt.tprintf
 tprintfln :: fmt.aprintfln
 
-
-
 App_API :: struct {
-	create:            		 proc() -> ^app.App,
-	init:              		 proc(first_run: bool = true),
-	init_window:       		 proc(),
-	create_gl_context: 		 proc(),
-	load_gl_procs:     		 proc(),
-	update:            		 proc() -> bool,
-	memory:            		 proc() -> rawptr,
-	memory_size:       		 proc() -> int,
-	store_tracking_allocator:proc(string, ^mem.Tracking_Allocator),
-	store_og_allocator:      proc(mem.Allocator),
-	should_run:        		 proc() -> bool,
-	wants_reload:      		 proc() -> bool,
-	wants_restart:     		 proc() -> bool,
-	reset_state:			 proc(),
-	hot_reload:        		 proc(mem: rawptr) -> bool,
-	shutdown:          		 proc(),
-	reload_colors:     		 proc(mem: rawptr, color_file_path: string),
-	last_edit_colors:  		 time.Time,
-	reload_shaders:			 proc(),
-	last_edit_shaders: 		 time.Time,
-	last_edit_dll:     		 time.Time,
-	version:           		 int,
-	lib:               		 dynlib.Library,
+	create:                   proc() -> ^app.App,
+	init:                     proc(first_run: bool = true),
+	init_window:              proc(),
+	create_gl_context:        proc(),
+	load_gl_procs:            proc(),
+	update:                   proc() -> bool,
+	memory:                   proc() -> rawptr,
+	memory_size:              proc() -> int,
+	store_tracking_allocator: proc(_: string, _: ^mem.Tracking_Allocator),
+	store_og_allocator:       proc(_: mem.Allocator),
+	should_run:               proc() -> bool,
+	wants_reload:             proc() -> bool,
+	wants_restart:            proc() -> bool,
+	wants_dll_rebuild:        proc() -> bool,
+	reset_state:              proc(),
+	hot_reload:               proc(mem: rawptr) -> bool,
+	shutdown:                 proc(),
+	reload_colors:            proc(mem: rawptr, color_file_path: string),
+	last_edit_colors:         time.Time,
+	reload_lua:               proc(mem: rawptr, lua_file_path: string),
+	last_edit_lua:            time.Time,
+	reload_shaders:           proc(),
+	last_edit_shaders:        time.Time,
+	last_edit_dll:            time.Time,
+	version:                  int,
+	lib:                      dynlib.Library,
 }
 
 when PROFILING {
@@ -85,6 +88,7 @@ when PROFILING {
 	}
 }
 
+@(lua_global)
 api: App_API
 
 main :: proc() {
@@ -173,13 +177,16 @@ run_hot_reload_mode :: proc() {
 	api.create_gl_context()
 	api.load_gl_procs()
 	api.init()
-	// api.hot_reload(api.memory())
+	api.reload_lua(api.memory(), LUA_UI_FILE_PATH)
 	for {
 		if api.wants_restart() {
 			println("restarting app...")
 			api.reset_state()
-			api.init(first_run=false)
+			api.init(first_run = false)
 			api.load_gl_procs()
+		}
+		if api.wants_dll_rebuild() {
+			rebuild_dll()
 		}
 		if should_reload_dll() || api.wants_reload() {
 			old_mem := api.memory()
@@ -188,18 +195,24 @@ run_hot_reload_mode :: proc() {
 			api.load_gl_procs()
 			println("hot reloaded, kept state")
 		}
-		if should_reload_shaders() { 
+		if should_reload_shaders() {
 			api.reload_shaders()
 			t_vert, _ := os.last_write_time_by_name(VERTEX_SHADER_PATH)
 			t_frag, _ := os.last_write_time_by_name(PIXEL_SHADER_PATH)
-			api.last_edit_shaders._nsec = max(t_vert._nsec, t_frag._nsec)	
+			api.last_edit_shaders._nsec = max(t_vert._nsec, t_frag._nsec)
 		}
-		if should_reload_colors() { 
+		if should_reload_colors() {
 			time.sleep(time.Millisecond * 100)
 			api.reload_colors(api.memory(), COLOR_FILE_PATH)
 			t, err := os.last_write_time_by_name(COLOR_FILE_PATH)
-			if err != io.Error.None  do panic(tprintf("Failed to get last write time of {}", err))
+			if err != io.Error.None do panic(tprintf("Failed to get last write time of {}", err))
 			api.last_edit_colors = t
+		}
+		if should_reload_lua() {
+			api.reload_lua(api.memory(), LUA_UI_FILE_PATH)
+			t, err := os.last_write_time_by_name(LUA_UI_FILE_PATH)
+			if err != io.Error.None do panic(tprintf("Failed to get last write time of {}", err))
+			api.last_edit_lua = t
 		}
 		if !api.update() do break
 	}
@@ -219,6 +232,7 @@ load_dll :: proc() {
 			break
 		}
 		if i == 19 {
+			printfln("could not find {}", new_dll_path)
 			panic("Tried 19 times and still couldn't copy.")
 		}
 	}
@@ -240,11 +254,11 @@ load_dll :: proc() {
 		panic(tprintfln("{}", check_time_err))
 	}
 	api.last_edit_dll = edit_time
-	api.version += 1
+	api.version       += 1
 	printfln("Loaded DLL from {}", new_dll_path)
 }
 
-should_reload_colors :: proc() -> bool { 
+should_reload_colors :: proc() -> bool {
 	time, err := os.last_write_time_by_name(COLOR_FILE_PATH)
 	if err != io.Error.None do panic(tprintfln("{}", err))
 	return time._nsec > api.last_edit_colors._nsec
@@ -256,10 +270,41 @@ should_reload_dll :: proc() -> bool {
 	return time._nsec > api.last_edit_dll._nsec
 }
 
-should_reload_shaders :: proc() -> bool { 
+should_reload_lua :: proc() -> bool {
+	t, err := os.last_write_time_by_name(LUA_UI_FILE_PATH)
+	if err != io.Error.None do return false
+	return t._nsec > api.last_edit_lua._nsec
+}
+
+should_reload_shaders :: proc() -> bool {
 	t_vert, err_v := os.last_write_time_by_name(VERTEX_SHADER_PATH)
-    t_frag, err_f := os.last_write_time_by_name(PIXEL_SHADER_PATH)
-    if err_v != io.Error.None || err_f != io.Error.None { return false }
-    latest := max(t_vert._nsec, t_frag._nsec)
-    return latest > api.last_edit_shaders._nsec	
+	t_frag, err_f := os.last_write_time_by_name(PIXEL_SHADER_PATH)
+	if err_v != io.Error.None || err_f != io.Error.None {return false}
+	latest := max(t_vert._nsec, t_frag._nsec)
+	return latest > api.last_edit_shaders._nsec
+}
+
+rebuild_dll :: proc() {
+	println("trying to rebuild the dll")
+	desc := os.Process_Desc {
+		working_dir = "C:\\Users\\n3or3tro\\MySoftware\\my-projects\\olay-framework",
+		command     = {
+			"odin",
+			"build",
+			"src/olay",
+			"-build-mode:dll",
+			"-out:build/app.dll",
+			"-debug",
+			"-ignore-warnings",
+			"-custom-attribute:lua_data",
+			"-custom-attribute:lua_global",
+			"-custom-attribute:lua_proc",
+			"-custom-attribute:lua_struct",
+		},
+	}
+	state, stdin, stdout, err := os.process_exec(desc, context.temp_allocator)
+	assert(err == os.General_Error.None, tprintf("{}", err))
+	// printfln("State: {}", state)
+	// printfln("stdin: {}", stdin)
+	// printfln("stderr: {}", stdout)
 }

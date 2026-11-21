@@ -1,0 +1,59 @@
+// raddbg 0.9.24 project file
+
+recent_file: path: "src/olay/generate.odin"
+recent_file: path: "../../odin/base/runtime/core.odin"
+recent_file: path: "../../odin/base/runtime/core_builtin.odin"
+recent_file: path: "../../odin/core/mem/tracking_allocator.odin"
+recent_file: path: "src/olay/ui.odin"
+recent_file: path: "../../odin/base/runtime/internal.odin"
+recent_file: path: "src/olay/app.odin"
+recent_file: path: "../olay/src/app/ui.odin"
+recent_file: path: "../../odin/core/sys/windows/user32.odin"
+recent_file: path: "src/olay/app_backend_win32.odin"
+recent_file: path: "src/main.odin"
+debug_info:
+{
+  path: "C:/Users/n3or3tro/MySoftware/my-projects/olay-framework/build/app-reloadable.pdb"
+  timestamp: 66210580285972
+}
+debug_info:
+{
+  path: "C:/Users/n3or3tro/MySoftware/my-projects/olay-framework/build/app.pdb"
+  timestamp: 66210580306544
+}
+target:
+{
+  executable: "../olay/build/app-reloadable.exe"
+  working_directory: "../olay"
+}
+debug_info:
+{
+  path: "C:/Users/n3or3tro/MySoftware/my-projects/olay/build/app-reloadable.pdb"
+  timestamp: 66210479635509
+}
+debug_info:
+{
+  path: "C:/Users/n3or3tro/MySoftware/my-projects/olay/build/app.pdb"
+  timestamp: 66210479634648
+}
+target:
+{
+  executable: "build/app-reloadable.exe"
+  working_directory: "../olay-framework"
+}
+debug_info:
+{
+  path: "C:/Users/n3or3tro/MySoftware/luajit/src/lua51.pdb"
+  timestamp: 66210566273195
+}
+target:
+{
+  executable: "src/olay/metaprogram.exe"
+  working_directory: "src/olay"
+  enabled: 1
+}
+debug_info:
+{
+  path: "C:/Users/n3or3tro/MySoftware/my-projects/olay-framework/src/olay/metaprogram.pdb"
+  timestamp: 66211361681154
+}

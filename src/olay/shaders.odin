@@ -112,7 +112,7 @@ app_reload_shaders :: proc() {
     gl.Uniform1i(gl.GetUniformLocation(ui_state.quad_shader_program, "blurred_ui"), 2)
 	gl.Uniform1i(gl.GetUniformLocation(ui_state.quad_shader_program, "audio_frequency_eq_response"), 3)
 
-    setup_for_quads(&ui_state.quad_shader_program)
+    gl_setup_for_quads(&ui_state.quad_shader_program)
     println("Succesfully reloaded shaders!")
 }
 
